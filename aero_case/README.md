@@ -36,11 +36,23 @@ Projicerad frontarea för modellen: 0.361 m².
 - Från sidobilden syns bara en ryttarsida; symmetri antagen
 - Perspektiv: bakhjulet ser ~7 % mindre ut än framhjulet i bilden → ±3–4 % osäkerhet i längdmått
 - **Benens IK är inte kalibrerad mot fotot.** `ik_knee()` använder L1 = L2 = 440 mm, vilket
-  placerar knät 78 mm från det uppmätta landmärket `knee_R` (fotot antyder lår ≈ 409 mm,
-  underben ≈ 388 mm). Knät är benets mest exponerade del, så detta går rakt in i frontarean.
-  `build_model.py` skriver ut residualen vid varje körning.
+  placerar knät 78 mm från det uppmätta landmärket `knee_R`. 440 mm stämmer dock mot Winter
+  för 175 cm (lår 429, underben 431), så felet ligger troligen i landmärkena (`hip` och
+  `knee_R` är ytpunkter, inte ledcentra) och i den gissade ankelpositionen
+  `ped + [-70, s*120, 95]`. Avvikelsen är nästan helt i x, så frontarean ändras bara ~0.3 %
+  (0.3614 → 0.3625 m²) – men vaken bakom benet påverkas mer än så.
+- **Bålen är ~50 % för voluminös.** Modellerad kroppsvolym (utan hjälm och skor) är 79.3 L
+  → 80 kg, mot åkarens 69 kg. Uppdelat: bål 51.5 L mot ~34 L antropometriskt, ben 25.6 mot
+  20.0, armar 7.7 mot 6.0. Två orsaker:
+  1. `torso = hull(...)` är ett **konvext** skal och kan därför inte ha någon midja.
+  2. `chest_low` (z = 965 mm) ligger i princip i samma höjd som `elbow` (961 mm) och strax
+     över `bag` (903 mm) – landmärket följer sannolikt arm-/väskelinjen, inte bröstbenet.
+     Att höja det 100 mm tar bort 7.4 kg **utan att ändra frontarean alls** (0.3614 m²),
+     eftersom den volymen ligger skuggad bakom låren i y-z-projektionen.
+
+  Hjälmbredden 190 mm är inte förklaringen: för att nå 69 kg enbart via breddskalan skulle
+  hjälmen behöva vara ~152–164 mm, vilket ingen vuxen aerohjälm är. En rimlig kombination är
+  `chest_low` +100 mm och bredd ×0.95 (hjälm 180 mm) → 70.4 kg och A = 0.3546 m² (−1.9 %).
 - **Frontvyns skalning finns inte i koden.** Kroppsbredderna (95 mm halv hjälmbredd, 165/172 mm
   bål osv.) är hårdkodade konstanter utan spårbarhet till frontfotot, och `overlay.py` validerar
   bara sidovyn. Byter man frontfoto uppdateras ingenting automatiskt.
-- `rider_implied_mass_kg` i model_info.json är nu 87 kg (kroppsvolym × 1010 kg/m³). Stämmer det
-  inte mot åkarens verkliga vikt är bålellipsoiderna för stora.

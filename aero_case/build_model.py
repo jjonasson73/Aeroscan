@@ -36,6 +36,10 @@ L = {k: px(*v) for k, v in {
     'bottle': (345, 1425)}.items()}
 FRONT_AX = np.array([X_REAR+WB, WHEEL_R])
 
+# The athlete this model is of. Used only as a calibration check: the modelled body
+# volume (helmet and shoes excluded) should land near RIDER_MASS_KG / 1010 kg/m3.
+RIDER_MASS_KG, RIDER_HEIGHT_MM = 69.0, 1750.0
+
 # ---------- primitive helpers (all watertight) ----------
 def P(x, z, y=0.0): return np.array([x, y, z], float)
 def X3(p2, y=0.0): return P(p2[0], p2[1], y)
@@ -165,25 +169,26 @@ def rider(pedR, pedL):
     head_c = np.array([nose[0] - 95, 0, 0.5*(hel_c[2] + chin[2]) - 5])
     head = ellipsoid(head_c, [100, 72, (hel_c[2] + 60 - chin[2])/2])
     neck = limb(sh + [-40, 0, 20], head_c + [-40, 0, -20], 60, 55)
-    parts = [torso, helmet, head, neck, ellipsoid(hands + [-15, 0, -5], [65, 55, 55])]
+    body = [torso, head, neck, ellipsoid(hands + [-15, 0, -5], [65, 55, 55])]
+    kit = [helmet]                       # worn, not body mass - kept out of the mass check
     for s in (1, -1):
         e = el + [0, s*85, 0]
-        parts += [limb(sh + [0, s*135, 0], e, 55, 46),                            # upper arm
-                  limb(e, hands + [-60, s*32, -10], 44, 33)]                      # forearm
+        body += [limb(sh + [0, s*135, 0], e, 55, 46),                             # upper arm
+                 limb(e, hands + [-60, s*32, -10], 44, 33)]                       # forearm
     # legs (2-link IK to the pedals; hip width & stance from front photo)
     for ped, s in ((pedR, -1), (pedL, 1)):
         hj = hip + [0, s*95, 0]
         ank = ped + [-70, s*120, 95]
         kn = ik_knee(hj, ank)
-        parts += [limb(hj, kn, 88, 58), limb(kn, ank, 58, 36),
-                  limb(kn + [-35, 0, -60], ank + [-20, 0, 120], 48, 34),          # calf
-                  ellipsoid(ped + [15, s*120, 38], [140, 52, 48])]               # shoe
+        body += [limb(hj, kn, 88, 58), limb(kn, ank, 58, 36),
+                 limb(kn + [-35, 0, -60], ank + [-20, 0, 120], 48, 34)]           # calf
+        kit.append(ellipsoid(ped + [15, s*120, 38], [140, 52, 48]))               # shoe
         if s == -1: kneeR = kn
-    return union(parts), kneeR
+    return union(body + kit), kneeR, union(body)
 
 # ---------- build ----------
 b, pedR, pedL = bike()
-r, kneeR = rider(pedR, pedL)
+r, kneeR, body = rider(pedR, pedL)
 wR, wF = wheel(X_REAR), wheel(X_REAR + WB)
 SINK = 3.0   # tyre contact: sink 3 mm below z=0 so snappy gets a clean contact patch
 parts = {'rider': r, 'bike': b, 'wheel_rear': wR, 'wheel_front': wF}
@@ -213,7 +218,8 @@ proj = unary_union(polys).intersection(box(-10, 0, 10, 10))
 # Sanity levers for the two assumptions the photos cannot check by themselves:
 #  - rider volume vs. the athlete's real mass (body density ~1010 kg/m3)
 #  - the IK knee vs. the measured knee_R landmark (see README "Known state")
-rider_vol = parts['rider'].volume                 # already scaled to m^3 above
+body.apply_translation([0, 0, -SINK]); body.apply_transform(T); body.apply_scale(1e-3)
+rider_vol = body.volume                           # body only: no helmet, no shoes
 knee_resid = float(np.hypot(*(kneeR[[0, 2]] - L['knee_R'])))
 # Everything the OpenFOAM case has to stay in sync with, emitted so the workflow can
 # read it instead of duplicating the numbers (see "Nyckelkonventioner" in the README).
@@ -224,13 +230,23 @@ info = dict(scale_mm_per_px=S, wheelbase_mm=WB, bb_height_mm=L['bb'][1],
             helmet_top_mm=L['helmet_top'][1], helmet_length_mm=L['helmet_front'][0]-L['helmet_tail'][0],
             frontal_area_m2=proj.area, bbox_m=full.bounds.tolist(),
             rider_volume_m3=rider_vol, rider_implied_mass_kg=rider_vol*1010,
+            rider_mass_target_kg=RIDER_MASS_KG,
             knee_ik_mm=kneeR.round(1).tolist(), knee_residual_mm=round(knee_resid, 1),
             n_faces={k: len(m.faces) for k, m in parts.items()},
             landmarks_mm={k: v.round(0).tolist() for k, v in L.items()})
 json.dump(info, open(HERE / 'model_info.json', 'w'), indent=1)
 print(json.dumps({k: v for k, v in info.items() if k != 'landmarks_mm'}, indent=1))
+mass_err = rider_vol*1010/RIDER_MASS_KG - 1
+if abs(mass_err) > 0.05:
+    print(f'\nWARNING: modelled body mass {rider_vol*1010:.0f} kg is {mass_err*100:+.0f}% off the '
+          f'athlete\'s {RIDER_MASS_KG:.0f} kg.\n'
+          f'  The torso hull is the usual cause: it is convex, so it cannot have a waist, and\n'
+          f'  chest_low sits at almost the same height as the elbow landmark, which makes the\n'
+          f'  trunk too deep. Volume error here is largely hidden behind the thighs in the\n'
+          f'  frontal projection, so it costs far less in CdA than in kg.')
 if knee_resid > 25:
-    print(f'\nWARNING: IK knee sits {knee_resid:.0f} mm from the measured knee_R landmark.\n'
-          f'  L1/L2 in ik_knee() are {440}/{440} mm but the photo implies a shorter femur/tibia,\n'
-          f'  and the ankle offset in rider() is a guess. The knee is the most exposed part of\n'
-          f'  the leg, so this feeds straight into frontal area and the CdA split.')
+    print(f'\nNOTE: IK knee sits {knee_resid:.0f} mm from the measured knee_R landmark.\n'
+          f'  L1/L2 = 440/440 mm matches Winter for a {RIDER_HEIGHT_MM/10:.0f} cm athlete (429/431),\n'
+          f'  so the gap is more likely landmark bias (hip/knee are surface points, not joint\n'
+          f'  centres) plus the guessed ankle offset in rider(). It moves the knee mainly in x,\n'
+          f'  so frontal area barely changes (~0.3%) - but the wake does.')
