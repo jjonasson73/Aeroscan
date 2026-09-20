@@ -55,11 +55,17 @@ functions
     yPlus      { type yPlus; libs (fieldFunctionObjects); writeControl writeTime; }
     wallShearStress { type wallShearStress; libs (fieldFunctionObjects); writeControl writeTime; }
 
-    // Avbryt automatiskt när CdA har stabiliserats (glidande medel ändras < 0.2 %)
+    // Avbryt automatiskt när CdA har stabiliserats (glidande medel ändras < 0.2 %).
+    // timeStart håller villkoret vilande under det inledande transientet: utan det kan
+    // medelvärdet råka ligga still runt iteration ~150 medan lösningen fortfarande
+    // byggs upp, och körningen stoppas alldeles för tidigt.
+    // OBS: fortfarande overifierad mot en riktig körning - kontrollera i log.simpleFoam
+    // att raden "Conditions met" dyker upp, annars körs endTime-iterationerna ut.
     stopWhenConverged
     {
         type            runTimeControl;
         libs            (utilityFunctionObjects);
+        timeStart       400;
         conditions
         {
             cdaStable

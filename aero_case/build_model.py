@@ -4,8 +4,11 @@ Scale refs: 700c rim (622 mm BSD) + 25 mm tyre -> OD 672 mm; helmet width 190 mm
 Build frame: X forward (rider facing +X), Y left, Z up, mm. Exported rotated 180deg
 about Z (rider faces -X, flow +X) and in metres.
 """
-import numpy as np, trimesh, manifold3d as m3d, json
+import numpy as np, trimesh, manifold3d as m3d, json, pathlib
 from trimesh.transformations import rotation_matrix as R
+
+HERE = pathlib.Path(__file__).resolve().parent   # outputs go next to the script, not into cwd
+GEOM = HERE / 'geometry'
 
 # ---------- photo -> bike coordinate transform (side view IMG_0113, full-res px) ----------
 REAR_PX, FRONT_PX = np.array([265., 1860.]), np.array([895., 1895.])
@@ -45,7 +48,7 @@ def limb(p1, p2, r1, r2, sub=3):
                                                  ellipsoid(p2, [r2]*3, sub).vertices]))
 def aero_tube(p1, p2, a1, a2=None, sub=3):  # ellipsoidal ends -> aero-ish cross-section
     return trimesh.convex.convex_hull(np.vstack([ellipsoid(p1, a1, sub).vertices,
-                                                 ellipsoid(p2, a2 or a1, sub).vertices]))
+                                                 ellipsoid(p2, a1 if a2 is None else a2, sub).vertices]))
 def hull(*ms): return trimesh.convex.convex_hull(np.vstack([m.vertices for m in ms]))
 def cyl_y(c, r, h, sec=64):
     m = trimesh.creation.cylinder(radius=r, height=h, sections=sec)
@@ -56,8 +59,30 @@ def revolve_y(profile, center, seg=180):
     msh = mf.to_mesh()
     m = trimesh.Trimesh(msh.vert_properties[:, :3], msh.tri_verts)
     m.apply_transform(R(np.pi/2, [1, 0, 0])); m.apply_translation(center); return m
+def weld(m, rel_tol=1e-5, rounds=6):
+    """Collapse the sub-micron slivers the boolean engine leaves behind.
+
+    trimesh's is_watertight only looks at face/vertex *indices*, so a mesh full of
+    zero-area triangles still passes it -- while the exported STL (a triangle soup that
+    every reader re-welds by position) falls apart into hundreds of open shells.
+    The tolerance is relative to the part's own size so this is safe whether the mesh is
+    still in mm or already scaled to metres: 1e-5 of the bbox diagonal is ~10 um here,
+    400x below the finest snappy cell, and leaves part volumes unchanged to 5 s.f.
+    """
+    digits = max(0, int(round(-np.log10(m.scale * rel_tol))))
+    for _ in range(rounds):
+        n0 = len(m.faces)
+        m.merge_vertices(digits_vertex=digits)
+        m.update_faces(m.nondegenerate_faces())
+        m.update_faces(m.unique_faces())
+        m.remove_unreferenced_vertices()
+        if len(m.faces) == n0:
+            break
+    m.fix_normals()
+    return m
+
 def union(ms):
-    out = trimesh.boolean.union(ms, engine='manifold'); return out
+    return weld(trimesh.boolean.union(ms, engine='manifold'))
 
 # ---------- wheels ----------
 def wheel(cx):
@@ -163,21 +188,49 @@ wR, wF = wheel(X_REAR), wheel(X_REAR + WB)
 SINK = 3.0   # tyre contact: sink 3 mm below z=0 so snappy gets a clean contact patch
 parts = {'rider': r, 'bike': b, 'wheel_rear': wR, 'wheel_front': wF}
 T = R(np.pi, [0, 0, 1])          # rider faces -X, flow along +X
+GEOM.mkdir(exist_ok=True)
 for k, m in parts.items():
     m.apply_translation([0, 0, -SINK]); m.apply_transform(T); m.apply_scale(1e-3)
-    assert m.is_watertight, k
-    m.export(f'{k}.stl')
-full = union(list(parts.values())); full.export('rider_bike_full.stl')
-# frontal area (projection on Y-Z, above ground)
-from shapely.geometry import Polygon
+    m.export(GEOM / f'{k}.stl')
+full = union(list(parts.values())); full.export(GEOM / 'rider_bike_full.stl')
+
+# Validate what snappyHexMesh will actually read, not the in-memory topology: STL is a
+# triangle soup, so a part is only closed if it survives an export/reload round trip.
+for k in parts:
+    chk = trimesh.load(GEOM / f'{k}.stl')
+    broken = len(trimesh.repair.broken_faces(chk))
+    assert chk.is_watertight and not broken, \
+        f'{k}.stl not watertight after export: {broken} broken faces, ' \
+        f'{len(chk.split(only_watertight=False))} shells'
+
+# frontal area (projection on Y-Z, clipped to the part above ground)
+from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 tris = full.vertices[full.faces][:, :, 1:]
 polys = [Polygon(t) for t in tris if Polygon(t).area > 1e-10]
-proj = unary_union(polys)
+proj = unary_union(polys).intersection(box(-10, 0, 10, 10))
+
+# Sanity levers for the two assumptions the photos cannot check by themselves:
+#  - rider volume vs. the athlete's real mass (body density ~1010 kg/m3)
+#  - the IK knee vs. the measured knee_R landmark (see README "Known state")
+rider_vol = parts['rider'].volume                 # already scaled to m^3 above
+knee_resid = float(np.hypot(*(kneeR[[0, 2]] - L['knee_R'])))
+# Everything the OpenFOAM case has to stay in sync with, emitted so the workflow can
+# read it instead of duplicating the numbers (see "Nyckelkonventioner" in the README).
+axle_rear = [round(-X_REAR*1e-3, 6), 0.0, round((WHEEL_R - SINK)*1e-3, 6)]
+axle_front = [round(-(X_REAR + WB)*1e-3, 6), 0.0, round((WHEEL_R - SINK)*1e-3, 6)]
 info = dict(scale_mm_per_px=S, wheelbase_mm=WB, bb_height_mm=L['bb'][1],
+            wheel_radius_m=WHEEL_R*1e-3, axle_rear_m=axle_rear, axle_front_m=axle_front,
             helmet_top_mm=L['helmet_top'][1], helmet_length_mm=L['helmet_front'][0]-L['helmet_tail'][0],
             frontal_area_m2=proj.area, bbox_m=full.bounds.tolist(),
+            rider_volume_m3=rider_vol, rider_implied_mass_kg=rider_vol*1010,
+            knee_ik_mm=kneeR.round(1).tolist(), knee_residual_mm=round(knee_resid, 1),
             n_faces={k: len(m.faces) for k, m in parts.items()},
             landmarks_mm={k: v.round(0).tolist() for k, v in L.items()})
-json.dump(info, open('model_info.json', 'w'), indent=1)
+json.dump(info, open(HERE / 'model_info.json', 'w'), indent=1)
 print(json.dumps({k: v for k, v in info.items() if k != 'landmarks_mm'}, indent=1))
+if knee_resid > 25:
+    print(f'\nWARNING: IK knee sits {knee_resid:.0f} mm from the measured knee_R landmark.\n'
+          f'  L1/L2 in ik_knee() are {440}/{440} mm but the photo implies a shorter femur/tibia,\n'
+          f'  and the ankle offset in rider() is a guess. The knee is the most exposed part of\n'
+          f'  the leg, so this feeds straight into frontal area and the CdA split.')

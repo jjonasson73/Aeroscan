@@ -4,10 +4,26 @@
 **Kontroll:** hjälmlängd från sidovyn blev 316 mm (rimligt för kort aerohjälm), hjulbas 982 mm, vevlagerhöjd 248 mm.
 
 ## Innehåll
-- `geometry/` – rider.stl, bike.stl, wheel_rear.stl, wheel_front.stl (vattentäta, meter), rider_bike_full.stl (boolesk union)
+- `geometry/` – rider.stl, bike.stl, wheel_rear.stl, wheel_front.stl (vattentäta, meter).
+  `rider_bike_full.stl` (boolesk union) genereras också men är gitignorerad – den används bara
+  av `overlay.py` och frontarea-beräkningen.
 - Koordinater: ryttaren tittar mot −x, flöde +x, z upp, mark z = 0 (däcken sänkta 3 mm för ren kontaktyta)
 - `0/ constant/ system/` – simpleFoam, kOmegaSST, 12.5 m/s (45 km/h), rullande mark, roterande hjul
+- `0/include/initialConditions` – **enda stället** där hastigheten står. U, k och omega härleds därifrån.
 - `build_model.py` – parametrisk modell; alla landmärken (px) står överst, justera och kör om
+- `tools/` – `inlet_conditions.py` (U → omega_hjul, k, omega_inlopp), `check_case.py` (konsistensvakt),
+  `cda_summary.py` (CdA-tabell till jobbsammanfattningen)
+
+## Installera
+    pip install -r requirements.txt     # numpy, scipy, trimesh, manifold3d, shapely, pillow
+
+## Bygg om geometrin
+    python build_model.py               # skriver ALLTID till geometry/ och model_info.json
+    python overlay.py /sokvag/till/sidofoto.png     # → preview/overlay_side.png, preview/front_projection.png
+    python tools/check_case.py          # axelpositioner + att STL:erna är slutna
+
+`build_model.py` och `overlay.py` skriver relativt sin egen katalog, så de går att köra
+från vilken arbetskatalog som helst.
 
 ## Kör (OpenFOAM ESI v2312+)
     ./Allrun          # 8 kärnor, ändra i system/decomposeParDict
@@ -16,6 +32,15 @@ Projicerad frontarea för modellen: 0.361 m².
 
 ## Begränsningar
 - Kroppen är byggd av ellipsoider/konvexa skal – ger rätt volym/siluett, inte veck i löst tyg
-- Ekrar är utelämnade (hjulen = fälg + däck + nav)
+- Ekrar är utelämnade (hjulen = fälg + däck + nav). Navet hänger fritt inuti fälgen.
 - Från sidobilden syns bara en ryttarsida; symmetri antagen
 - Perspektiv: bakhjulet ser ~7 % mindre ut än framhjulet i bilden → ±3–4 % osäkerhet i längdmått
+- **Benens IK är inte kalibrerad mot fotot.** `ik_knee()` använder L1 = L2 = 440 mm, vilket
+  placerar knät 78 mm från det uppmätta landmärket `knee_R` (fotot antyder lår ≈ 409 mm,
+  underben ≈ 388 mm). Knät är benets mest exponerade del, så detta går rakt in i frontarean.
+  `build_model.py` skriver ut residualen vid varje körning.
+- **Frontvyns skalning finns inte i koden.** Kroppsbredderna (95 mm halv hjälmbredd, 165/172 mm
+  bål osv.) är hårdkodade konstanter utan spårbarhet till frontfotot, och `overlay.py` validerar
+  bara sidovyn. Byter man frontfoto uppdateras ingenting automatiskt.
+- `rider_implied_mass_kg` i model_info.json är nu 87 kg (kroppsvolym × 1010 kg/m³). Stämmer det
+  inte mot åkarens verkliga vikt är bålellipsoiderna för stora.
