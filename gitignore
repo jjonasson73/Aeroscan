@@ -1,0 +1,19 @@
+# OpenFOAM-körningar
+aero_case/processor*/
+aero_case/postProcessing/
+aero_case/VTK/
+aero_case/log.*
+aero_case/*.foam
+aero_case/*.OpenFOAM
+aero_case/constant/polyMesh/
+aero_case/constant/triSurface/
+aero_case/constant/extendedFeatureEdgeMesh/
+# tidskataloger (1, 500, 1500 ...) men behåll 0/
+aero_case/[1-9]*/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
