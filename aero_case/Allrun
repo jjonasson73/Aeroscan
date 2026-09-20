@@ -1,0 +1,4 @@
+#!/bin/sh
+cd "${0%/*}" || exit
+./Allmesh && ./Allsolve
+echo "CdA [m^2] = Cd i postProcessing/CdA_total/0/coefficient.dat (Aref = 1)"

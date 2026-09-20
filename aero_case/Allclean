@@ -1,0 +1,5 @@
+#!/bin/sh
+cd "${0%/*}" || exit
+. ${WM_PROJECT_DIR:?}/bin/tools/CleanFunctions
+cleanCase0 2>/dev/null || cleanCase
+rm -rf constant/triSurface/*.stl constant/extendedFeatureEdgeMesh
