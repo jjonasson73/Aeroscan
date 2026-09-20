@@ -1,0 +1,56 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  AeroScan rider+bike case  (OpenFOAM ESI v2312+, openfoam.com)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volVectorField;
+    location    "0";
+    object      U;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+Uinlet          (12.5 0 0);
+dimensions      [0 1 -1 0 0 0 0];
+internalField   uniform $Uinlet;
+boundaryField
+{
+    #includeEtc "caseDicts/setConstraintTypes"
+    inlet
+    {
+        type fixedValue; value uniform $Uinlet;
+    }
+    outlet
+    {
+        type inletOutlet; inletValue uniform (0 0 0); value uniform $Uinlet;
+    }
+    ground
+    {
+        type fixedValue; value uniform $Uinlet;   // moving ground
+    }
+    rider
+    {
+        type noSlip;
+    }
+    bike
+    {
+        type noSlip;
+    }
+    wheel_rear
+    {
+        type            rotatingWallVelocity;
+        origin          (0.4000 0 0.3330);
+        axis            (0 -1 0);
+        omega           37.202;   // U/R_tyre, rolling without slip
+        value           uniform (0 0 0);
+    }
+    wheel_front
+    {
+        type            rotatingWallVelocity;
+        origin          (-0.5815 0 0.3330);
+        axis            (0 -1 0);
+        omega           37.202;   // U/R_tyre, rolling without slip
+        value           uniform (0 0 0);
+    }
+}

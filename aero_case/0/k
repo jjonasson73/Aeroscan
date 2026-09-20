@@ -1,0 +1,48 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  AeroScan rider+bike case  (OpenFOAM ESI v2312+, openfoam.com)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0";
+    object      k;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+Uinlet          (12.5 0 0);
+dimensions      [0 2 -2 0 0 0 0];
+internalField   uniform 0.02344;
+boundaryField
+{
+    #includeEtc "caseDicts/setConstraintTypes"
+    inlet
+    {
+        type fixedValue; value uniform 0.02344;
+    }
+    outlet
+    {
+        type inletOutlet; inletValue uniform 0.02344; value uniform 0.02344;
+    }
+    ground
+    {
+        type kqRWallFunction; value uniform 0.02344;
+    }
+    rider
+    {
+        type kqRWallFunction; value uniform 0.02344;
+    }
+    bike
+    {
+        type kqRWallFunction; value uniform 0.02344;
+    }
+    wheel_rear
+    {
+        type kqRWallFunction; value uniform 0.02344;
+    }
+    wheel_front
+    {
+        type kqRWallFunction; value uniform 0.02344;
+    }
+}
