@@ -1,0 +1,36 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  AeroScan rider+bike case  (OpenFOAM ESI v2312+, openfoam.com)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      surfaceFeatureExtractDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+rider.stl
+{
+    extractionMethod    extractFromSurface;
+    includedAngle       150;
+    writeObj            no;
+}
+bike.stl
+{
+    extractionMethod    extractFromSurface;
+    includedAngle       150;
+    writeObj            no;
+}
+wheel_rear.stl
+{
+    extractionMethod    extractFromSurface;
+    includedAngle       150;
+    writeObj            no;
+}
+wheel_front.stl
+{
+    extractionMethod    extractFromSurface;
+    includedAngle       150;
+    writeObj            no;
+}

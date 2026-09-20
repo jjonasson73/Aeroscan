@@ -1,0 +1,76 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  AeroScan rider+bike case  (OpenFOAM ESI v2312+, openfoam.com)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     simpleFoam;
+startFrom       latestTime;
+startTime       0;
+stopAt          endTime;
+endTime         2000;
+deltaT          1;
+writeControl    timeStep;
+writeInterval   500;
+purgeWrite      2;
+writeFormat     binary;
+writePrecision  8;
+writeCompression off;
+timeFormat      general;
+timePrecision   6;
+runTimeModifiable true;
+
+// NOTE: Aref = 1  ->  the reported "Cd" IS CdA [m^2] directly.
+// Projected frontal area of the model (for reference): 0.3614 m^2
+forceDefaults
+{
+    type            forceCoeffs;
+    libs            (forces);
+    writeControl    timeStep;
+    writeInterval   1;
+    log             true;
+    rho             rhoInf;
+    rhoInf          1.20;
+    CofR            (0 0 0);
+    liftDir         (0 0 1);
+    dragDir         (1 0 0);
+    pitchAxis       (0 1 0);
+    magUInf         12.5;
+    lRef            1.0;
+    Aref            1.0;
+}
+
+functions
+{
+    CdA_total  { $forceDefaults; patches (rider bike wheel_rear wheel_front); }
+    CdA_rider  { $forceDefaults; patches (rider); }
+    CdA_bike   { $forceDefaults; patches (bike); }
+    CdA_wheels { $forceDefaults; patches (wheel_rear wheel_front); }
+    yPlus      { type yPlus; libs (fieldFunctionObjects); writeControl writeTime; }
+    wallShearStress { type wallShearStress; libs (fieldFunctionObjects); writeControl writeTime; }
+
+    // Avbryt automatiskt när CdA har stabiliserats (glidande medel ändras < 0.2 %)
+    stopWhenConverged
+    {
+        type            runTimeControl;
+        libs            (utilityFunctionObjects);
+        conditions
+        {
+            cdaStable
+            {
+                type            average;
+                functionObject  CdA_total;
+                fields          (Cd);
+                tolerance       2e-3;
+                window          150;
+                windowType      approximate;
+            }
+        }
+    }
+}
