@@ -249,6 +249,64 @@ kostat lika mycket över ett varv:
 med vindriktningen φ likformig över varvet. Det är CdA_eff, inte CdA vid en enskild vinkel,
 som avgör om en position är bättre på en blåsig dag.
 
+### Resultat 2026-09-21: tecknet håller, storleken gör det inte
+
+**Kortversionen: din tunade position är BÄTTRE rakt fram men SÄMRE runt 10 graders yaw,
+och vinsten är borta i sidvind. Hur mycket sämre vet vi inte.**
+
+Position: `pad_drop_mm=-10 saddle_fore_mm=10 saddle_up_mm=6` mot baseline, 12.5 m/s.
+
+Fyra vinklar på medium, två oberoende körningar:
+
+| yaw | ΔCdA körning 1 | ΔCdA körning 2 |
+|---|---|---|
+| +0° | −0.0052 | −0.0059 |
+| +5° | −0.0062 | −0.0081 |
+| +10° | **+0.0128** | **+0.0118** |
+| +15° | −0.0046 | −0.0072 |
+
+Vid 10 grader byter deltat tecken: den tunade positionen blir 6–7 % *sämre*. De två
+körningarna är överens om det på 0.0010 m², alltså inom brusgolvet. Det är inte en
+slumpmässig utreagare.
+
+**Vad repliken inte bevisade.** `build_model.py` är deterministisk, så båda körningarna
+byggde identiska STL:er och snappyHexMesh gjorde i praktiken samma nät. Repliken testade
+alltså solvern och MPI-reduktionen, inte nätet — ett deterministiskt nätfel reproducerar sig
+perfekt. Därför kördes samma punkt om på en annan nätnivå.
+
+| nätnivå | ΔCdA vid 10° |
+|---|---|
+| coarse | +0.0058 ± 0.0006 |
+| medium | +0.0118, +0.0128 |
+
+Tecknet håller, storleken gör det inte — en faktor två mellan nivåerna. **Det underkänns av
+projektets eget go/no-go-kriterium:** absolutvärdena får skilja sig, men deltat ska hålla
+inom 20 % mellan nätnivåer. Vid 0 grader klarade deltat det testet (se go/no-go ovan). Vid
+10 grader gör det inte det.
+
+Slutsatsen är alltså: **effekten är verklig, siffran är det inte.** Positionen är sämre
+runt 10 grader, men hur mycket är inte upplöst av de här näten.
+
+Vad det betyder praktiskt, från båda medium-körningarna:
+
+| | ΔCdA_eff vid 10 km/h vind (≈14° typisk yaw) |
+|---|---|
+| körning 1 | +0.45 % |
+| körning 2 | −0.42 % |
+
+Alltså **noll**. De −2.4 % som mättes i stilla luft överlever inte vinden. Det svaret är
+robust även om 10-graderspunktens storlek skulle visa sig vara ett nätartefakt, för då är
+hela kurvan osäker åt andra hållet.
+
+**Det är inte konvergensbrus.** Coarse-körningen ger ± 0.0002 och ± 0.0005 inom
+medelvärdesfönstret, utan drift- eller oupplöst-flaggor. Kraften står stilla; lösningarna är
+stationära. En tidig hypotes om att simpleFoam svänger vid yaw är därmed avfärdad — men den
+gav `yaw_report.py` sin svängnings- och driftdiagnostik, som numera visar det direkt.
+
+**Öppet.** Den nätnivå som hade avgjort storleken, `fine`, saknas ännu. En vinkelförfining
+runt 10 grader (8, 9, 10, 11, 12) skulle visa hur smal regimen är. Och bara plussidan av
+noll är körd; cyklisten är inte spegelsymmetrisk, så −10 grader kan se annorlunda ut.
+
 ### Kostnader att känna till
 - **Nätet är detsamma vid alla vinklar.** Svepet kör `configure_case.sh ... wide`, som
   breddar förfiningsboxarna (nearBox y ±0.7 m, wakeBox y ±1.1 m) vid *varje* vinkel, noll
