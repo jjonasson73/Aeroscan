@@ -8,12 +8,9 @@ name: aero-delta
 on:
   workflow_dispatch:
     inputs:
-      param:
-        description: "FIT-parameter att ändra"
-        default: "pad_drop_mm"
-      delta:
-        description: "Ändringens storlek"
-        default: "-20"
+      fit:
+        description: "FIT-ändringen, mellanslagsseparerad (t.ex. pad_drop_mm=-10 saddle_fore_mm=10)"
+        default: "pad_drop_mm=-20"
       mesh_a:
         description: "Nätnivå A"
         type: choice
@@ -58,10 +55,15 @@ jobs:
           echo "NP=$(nproc)" >> $GITHUB_ENV
 
       - name: Build geometry
+        # FIT går via env, inte direkt ${{ }}-interpolation in i skriptkroppen. Oquoterad
+        # $FIT ordsplittas till flera argument, vilket är vad build_model.py vill ha, och
+        # en okänd parameter avbryter där i stället för att tyst bygga baseline.
+        env:
+          FIT: ${{ inputs.fit }}
         run: |
           pip install --quiet -r requirements.txt
           if [ "${{ matrix.pos }}" = "tuned" ]; then
-            python3 build_model.py ${{ inputs.param }}=${{ inputs.delta }}
+            python3 build_model.py $FIT
           else
             python3 build_model.py
           fi
@@ -113,7 +115,7 @@ jobs:
           # tee: utslaget måste synas i jobbloggen också, inte bara i sammanfattningen -
           # sammanfattningen går inte att läsa via API:et.
           {
-            echo "## ${{ inputs.param }} = ${{ inputs.delta }} · ${{ inputs.mesh_a }} vs ${{ inputs.mesh_b }} · ${{ inputs.speed }} m/s"
+            echo "## ${{ inputs.fit }} · ${{ inputs.mesh_a }} vs ${{ inputs.mesh_b }} · ${{ inputs.speed }} m/s"
             echo
             python3 tools/delta_report.py results 150
           } | tee -a $GITHUB_STEP_SUMMARY
