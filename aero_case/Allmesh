@@ -1,9 +1,23 @@
 #!/bin/sh
 cd "$(dirname "$0")" || exit   # robust oavsett om skriptet körs som ./Allmesh, bash Allmesh eller med full sökväg
 . ${WM_PROJECT_DIR:?}/bin/tools/RunFunctions
-mkdir -p constant/triSurface && cp -f geometry/rider.stl geometry/bike.stl geometry/wheel_*.stl constant/triSurface/
-runApplication surfaceFeatureExtract
-runApplication blockMesh
-runApplication decomposePar -copyZero
-runParallel snappyHexMesh -overwrite
-runParallel checkMesh
+
+# runApplication/runParallel loggar till fil och stoppar INTE vid fel, så utan de här
+# kontrollerna kaskadar ett tidigt fel genom alla efterföljande steg och bara den sista
+# exitkoden syns. Då står man med "allt dog på en sekund" och ingen aning om varför.
+die() {
+    echo "" >&2
+    echo "===== $1 MISSLYCKADES =====" >&2
+    [ -f "log.$1" ] && tail -n 40 "log.$1" >&2
+    exit 1
+}
+
+mkdir -p constant/triSurface
+cp -f geometry/rider.stl geometry/bike.stl geometry/wheel_*.stl constant/triSurface/ \
+    || { echo "kunde inte kopiera STL:er till constant/triSurface" >&2; exit 1; }
+
+runApplication surfaceFeatureExtract  || die surfaceFeatureExtract
+runApplication blockMesh              || die blockMesh
+runApplication decomposePar -copyZero || die decomposePar
+runParallel snappyHexMesh -overwrite  || die snappyHexMesh
+runParallel checkMesh                 || die checkMesh

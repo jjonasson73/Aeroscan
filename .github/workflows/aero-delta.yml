@@ -88,7 +88,7 @@ jobs:
           mkdir -p out
           cp -r postProcessing/CdA_* out/ 2>/dev/null || true
           cp model_info.json out/ 2>/dev/null || true
-          cp log.checkMesh log.simpleFoam out/ 2>/dev/null || true
+          cp log.* out/ 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         if: always()

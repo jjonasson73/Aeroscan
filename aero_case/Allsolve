@@ -1,8 +1,17 @@
 #!/bin/sh
-cd "$(dirname "$0")" || exit   # robust oavsett om skriptet körs som ./Allmesh, bash Allmesh eller med full sökväg
+cd "$(dirname "$0")" || exit
 . ${WM_PROJECT_DIR:?}/bin/tools/RunFunctions
+
+die() {
+    echo "" >&2
+    echo "===== $1 MISSLYCKADES =====" >&2
+    [ -f "log.$1" ] && tail -n 40 "log.$1" >&2
+    exit 1
+}
+
 # fräscha 0-fält i varje processor (fungerar tack vare setConstraintTypes)
 for d in processor*; do rm -rf "$d/0" "$d"/[1-9]*; cp -r 0 "$d/0"; done
 rm -rf postProcessing log.potentialFoam log.simpleFoam
-runParallel potentialFoam -writephi
-runParallel $(getApplication)
+
+runParallel potentialFoam -writephi || die potentialFoam
+runParallel $(getApplication)       || die simpleFoam
