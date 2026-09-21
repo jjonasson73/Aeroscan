@@ -55,6 +55,11 @@ plus fit-koordinaterna `saddle_height_mm`, `saddle_setback_mm`, `effective_sta_d
     python build_model.py               # skriver ALLTID till geometry/ och model_info.json
     python overlay.py /sokvag/till/sidofoto.png     # → preview/overlay_side.png, preview/front_projection.png
     python tools/check_case.py          # axelpositioner + att STL:erna är slutna
+    python tools/render_views.py        # → preview/exposure.png, preview/silhouette_delta.png
+
+`render_views.py` färgar ytorna efter hur rakt de möter flödet och ritar frontarean för
+baseline mot en tunad position med skillnaden markerad. Allt kommer ur geometrin — det är
+alltså ingen CFD-data, men det är exakt den yta som bygger formmotståndet.
 
 `build_model.py` och `overlay.py` skriver relativt sin egen katalog, så de går att köra
 från vilken arbetskatalog som helst.
