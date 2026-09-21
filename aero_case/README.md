@@ -142,6 +142,49 @@ ligger runt 2 % CdA.** Under det är siffran en gissning.
 kostnad, men ger ett riktigt felstapel i stället för en nätjämförelse som vi nu vet inte är
 det som begränsar.
 
+### Körning 3: pad_drop_mm=-10 saddle_fore_mm=10 saddle_up_mm=6 · medium · 3 repliker
+
+| replik | baseline | tunad | ΔCdA |
+|---|---|---|---|
+| r1 | 0.1930 | 0.1885 | −0.0045 |
+| r2 | 0.1930 | 0.1884 | −0.0046 |
+| r3 | 0.1953 | 0.1866 | **−0.0087** |
+
+Medel −0.0059 ± 0.0014, **median −0.0046**. r3 ligger 3.0σ från r1/r2, som i sin tur skiljer
+sig 0.0001 m² åt. Medelvärdet dras av en punkt; medianen är det tal som stämmer med
+körning 1 och 2 och med screeningen.
+
+### Brusmodellen bekräftad
+Fem oberoende körningar av **identisk** baseline-geometri på medium:
+
+| | CdA |
+|---|---|
+| körning 1 | 0.1935 |
+| körning 2 | 0.1945 |
+| körning 3, r1 | 0.1930 |
+| körning 3, r2 | 0.1930 |
+| körning 3, r3 | 0.1953 |
+
+Spann 0.0023 m², **std 0.0010 m² (0.52 %)** — precis den 0.0010–0.0014 m² som gissades
+efter körning 2. Deltaosäkerheten blir då σ ≈ 0.0014 m².
+
+Notera att r1 och r2 reproducerade varandra på fjärde decimalen. Bruset är alltså inte
+jämnt fördelat utan kommer i skov: oftast reproducerar pipelinen sig nästan exakt, ibland
+hamnar ett jobb i ett annat nättillstånd och skiftar ~0.002 m². Sannolikt
+prismalagerpåläggningen, som tar binära beslut mot kvalitetströsklar.
+
+### Alla tre positioner är aerodynamiskt oskiljbara
+
+| position | ΔCdA (median) | höftvinkel | knä BDC |
+|---|---|---|---|
+| pad −20 | −0.0045 | **54.3°** | 145.1° |
+| pad −10, sadel fram 10 upp 10 | −0.0046 | 57.5° | **149.8°** |
+| pad −10, sadel fram 10 upp 6 | −0.0046 | 57.6° | 147.8° |
+
+Alla tre ligger inom 0.0001 m² av varandra, alltså **14 gånger under deltaosäkerheten**.
+Slutsats: **välj på fit-vinklar, inte på CdA.** Den sista raden är den enda som håller både
+höftvinkeln oförändrad och knät mitt i fit-fönstret.
+
 ### Δ-CdA: vad som faktiskt går att lita på
 28 mm padhöjd ≈ 2° ryggvinkel ≈ **2 % CdA**. Konvergenstoleransen är 0.2 %, alltså tio
 gånger under signalen. Det som kan dränka den är **nätbruset**: varje position ger ny STL

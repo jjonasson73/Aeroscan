@@ -79,9 +79,22 @@ def main(root, window, label):
     if label == 'replik':
         # Med repliker är medelvärdet svaret och spridningen felstapeln.
         se = vals.std(ddof=1)/np.sqrt(len(vals))
+        med = float(np.median(vals))
         print(f'- **Medelvärde ΔCdA = {vals.mean():+.4f} ± {se:.4f} m²** '
               f'(standardfel över {len(vals)} repliker)')
+        print(f'- Median ΔCdA = {med:+.4f} m²')
         print(f'- Spridning mellan repliker: {spread:.4f} m²')
+        # Medelvärdet är inte robust mot en enskild avvikare. Med tre repliker går det inte
+        # att avgöra om spridningen är bred eller om en punkt är trasig, men mönstret syns:
+        # avviker en punkt mycket mer från medianen än alla andra ska medianen användas.
+        if len(vals) >= 3:
+            dev = np.abs(vals - med)
+            worst, rest = dev.max(), np.sort(dev)[-2]
+            if rest > 0 and worst > 2*rest or (rest == 0 and worst > 0):
+                bad = [g for g, d in deltas.items() if abs(d - med) == worst]
+                print(f'- ⚠ **{", ".join(bad)} avviker kraftigt** ({worst:.4f} m² från medianen, '
+                      f'mot {rest:.4f} för näst värsta). Medelvärdet dras av den punkten – '
+                      f'använd medianen och undersök den repliken innan du litar på medelvärdet.')
         print(f'- Konvergensbrus inom en körning (största std): {noise:.4f} m²')
         if len(vals) == 2:
             print('- ⚠ Standardfelet är räknat ur **två** punkter och är därför självt mycket '
@@ -90,8 +103,10 @@ def main(root, window, label):
                   'framför allt en sanity-check på att spridningen är i förväntad storlek '
                   '(vi har mätt upp 0.0010–0.0014 m² mellan separata körningar).')
         if abs(vals.mean()) > 3*se and se > 0:
-            print(f'\n**SIGNIFIKANT.** Deltat är {abs(vals.mean())/se:.1f} gånger sitt '
-                  f'standardfel. Ändringen går att mäta med det här upplägget.')
+            print(f'\n**SKILT FRÅN NOLL.** Deltat är {abs(vals.mean())/se:.1f} gånger sitt '
+                  f'standardfel, alltså är ändringen reell. Det säger däremot inte att '
+                  f'*storleken* är väl bestämd – kolla spridningen mellan replikerna innan '
+                  f'du citerar ett exakt tal.')
         elif abs(vals.mean()) > 2*se and se > 0:
             print(f'\n**SVAG SIGNAL.** Deltat är bara {abs(vals.mean())/se:.1f} gånger sitt '
                   f'standardfel. Tecknet är troligen rätt, storleken osäker. Fler repliker '
