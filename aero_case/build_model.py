@@ -83,6 +83,17 @@ def revolve_y(profile, center, seg=180):
     msh = mf.to_mesh()
     m = trimesh.Trimesh(msh.vert_properties[:, :3], msh.tri_verts)
     m.apply_transform(R(np.pi/2, [1, 0, 0])); m.apply_translation(center); return m
+def open_edges(m):
+    """Count edges not shared by exactly two faces.
+
+    This is the networkx-free version of the watertightness check:
+    trimesh.repair.broken_faces() needs networkx, which is an optional trimesh
+    dependency and not worth making the geometry build depend on.
+    """
+    paired = trimesh.grouping.group_rows(m.edges_sorted, require_count=2)
+    return len(m.edges_sorted) - 2*len(paired)
+
+
 def weld(m, rel_tol=1e-5, rounds=6):
     """Collapse the sub-micron slivers the boolean engine leaves behind.
 
@@ -248,9 +259,9 @@ full = union(list(parts.values())); full.export(GEOM / 'rider_bike_full.stl')
 # triangle soup, so a part is only closed if it survives an export/reload round trip.
 for k in parts:
     chk = trimesh.load(GEOM / f'{k}.stl')
-    broken = len(trimesh.repair.broken_faces(chk))
-    assert chk.is_watertight and not broken, \
-        f'{k}.stl not watertight after export: {broken} broken faces, ' \
+    bad = open_edges(chk)
+    assert chk.is_watertight and not bad, \
+        f'{k}.stl not watertight after export: {bad} open edges, ' \
         f'{len(chk.split(only_watertight=False))} shells'
 
 # frontal area (projection on Y-Z, clipped to the part above ground)
