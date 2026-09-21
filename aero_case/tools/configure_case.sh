@@ -3,9 +3,14 @@
 # workflows cannot drift apart -- a delta comparison is only meaningful if both sides were
 # set up by exactly the same code.
 #
-#   tools/configure_case.sh <quick|coarse|fine> <speed m/s> <max_iterations> <nprocs>
+#   tools/configure_case.sh <quick|coarse|medium|fine> <speed> <max_iterations> <nprocs> [fixed]
+#
+# A fifth argument "fixed" disables runTimeControl so the run goes to exactly max_iterations.
+# A delta comparison needs both positions equally converged; letting the convergence monitor
+# stop one at 700 iterations and the other at 1100 puts convergence noise straight into the
+# difference you are trying to measure.
 set -euo pipefail
-MESH=$1; U=$2; ITER=$3; NP=$4
+MESH=$1; U=$2; ITER=$3; NP=$4; FIXED=${5:-}
 S=system/snappyHexMeshDict
 
 foamDictionary -entry numberOfSubdomains -set "$NP"   system/decomposeParDict
@@ -19,10 +24,31 @@ foamDictionary -entry turbKE    -set "$TKE"     0/include/initialConditions
 foamDictionary -entry turbOmega -set "$TOMEGA"  0/include/initialConditions
 foamDictionary -entry boundaryField/wheel_rear/omega  -set "$OMEGA" 0/U
 foamDictionary -entry boundaryField/wheel_front/omega -set "$OMEGA" 0/U
-foamDictionary -entry functions/forceDefaults/magUInf -set "$U" system/controlDict
+# magUInf sitter i forceDefaults, som är en TOPPNIVÅ-post som de fyra function objects
+# drar in med $forceDefaults. foamDictionary -set skriver om hela filen med makrot
+# expanderat, så efter första skrivningen ovan (endTime) har var och en sin egen kopia och
+# forceDefaults/magUInf når dem inte längre. Därför sätts den på varje function object,
+# och vi läser tillbaka för att bevisa att den tog.
+n_set=0
+for fo in forceDefaults functions/CdA_total functions/CdA_rider functions/CdA_bike functions/CdA_wheels; do
+  if foamDictionary -entry "$fo/magUInf" -set "$U" system/controlDict >/dev/null 2>&1; then
+    n_set=$((n_set + 1))
+  fi
+done
+got=$(foamDictionary -entry functions/CdA_total/magUInf -value system/controlDict 2>/dev/null | tr -d '[:space:];')
+if [ "$got" != "$U" ]; then
+  echo "magUInf sattes inte: CdA_total har '$got', ville ha '$U' (lyckades på $n_set ställen)" >&2
+  exit 1
+fi
+echo "magUInf = $got satt på $n_set ställen i controlDict"
 
 # Mesh resolution. foamDictionary edits the dictionary structure, so these cannot silently
 # no-op the way a pattern-matching sed does when the file is reformatted.
+if [ "$FIXED" = "fixed" ]; then
+  foamDictionary -entry functions/stopWhenConverged/timeStart -set 1000000 system/controlDict
+  echo "runTimeControl avstängd: kör till exakt $ITER iterationer"
+fi
+
 case "$MESH" in
   quick|coarse)
     for pat in rider bike wheel_rear wheel_front; do
@@ -30,6 +56,11 @@ case "$MESH" in
     done
     foamDictionary -entry castellatedMeshControls/features -set \
       '({file "rider.eMesh"; level 5;} {file "bike.eMesh"; level 5;} {file "wheel_rear.eMesh"; level 5;} {file "wheel_front.eMesh"; level 5;})' $S
+    foamDictionary -entry castellatedMeshControls/refinementRegions/nearBox/levels -set "((1E15 3))" $S
+    foamDictionary -entry castellatedMeshControls/refinementRegions/wakeBox/levels -set "((1E15 2))" $S ;;
+  medium)
+    # fine's surface resolution with coarse's refinement boxes: coarse vs medium then differ
+    # ONLY in how finely the body is resolved, which is what a refinement study needs.
     foamDictionary -entry castellatedMeshControls/refinementRegions/nearBox/levels -set "((1E15 3))" $S
     foamDictionary -entry castellatedMeshControls/refinementRegions/wakeBox/levels -set "((1E15 2))" $S ;;
   fine) : ;;   # the dictionary ships at fine

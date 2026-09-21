@@ -57,8 +57,17 @@ KNEE_TARGET_DEG = 145.0                # knee at bottom dead centre; fit window 
 BODY_DENSITY = 1010.0                  # kg/m3
 
 for _a in sys.argv[1:]:                # e.g. `python build_model.py pad_drop_mm=-20`
-    _k, _v = _a.split('=')
-    (RIDER if _k in RIDER else FIT)[_k] = None if _v == 'None' else float(_v)
+    if '=' not in _a:
+        sys.exit(f'argumentet {_a!r} saknar =; förväntar nyckel=värde')
+    _k, _v = _a.split('=', 1)
+    # En okänd nyckel MÅSTE avbryta. Skrevs den bara in i FIT skulle en stavfel-körning
+    # tyst bygga baseline-geometrin och rapportera ett delta på noll som om det vore ett
+    # resultat - exakt den sortens tyst fel som är omöjlig att upptäcka i efterhand.
+    _target = RIDER if _k in RIDER else FIT if _k in FIT else None
+    if _target is None:
+        sys.exit(f'okänd parameter {_k!r}. Giltiga: '
+                 + ', '.join(sorted(list(RIDER) + list(FIT))))
+    _target[_k] = None if _v == 'None' else float(_v)
 
 # ---------- primitive helpers (all watertight) ----------
 def P(x, z, y=0.0): return np.array([x, y, z], float)
@@ -83,6 +92,17 @@ def revolve_y(profile, center, seg=180):
     msh = mf.to_mesh()
     m = trimesh.Trimesh(msh.vert_properties[:, :3], msh.tri_verts)
     m.apply_transform(R(np.pi/2, [1, 0, 0])); m.apply_translation(center); return m
+def open_edges(m):
+    """Count edges not shared by exactly two faces.
+
+    This is the networkx-free version of the watertightness check:
+    trimesh.repair.broken_faces() needs networkx, which is an optional trimesh
+    dependency and not worth making the geometry build depend on.
+    """
+    paired = trimesh.grouping.group_rows(m.edges_sorted, require_count=2)
+    return len(m.edges_sorted) - 2*len(paired)
+
+
 def weld(m, rel_tol=1e-5, rounds=6):
     """Collapse the sub-micron slivers the boolean engine leaves behind.
 
@@ -248,9 +268,9 @@ full = union(list(parts.values())); full.export(GEOM / 'rider_bike_full.stl')
 # triangle soup, so a part is only closed if it survives an export/reload round trip.
 for k in parts:
     chk = trimesh.load(GEOM / f'{k}.stl')
-    broken = len(trimesh.repair.broken_faces(chk))
-    assert chk.is_watertight and not broken, \
-        f'{k}.stl not watertight after export: {broken} broken faces, ' \
+    bad = open_edges(chk)
+    assert chk.is_watertight and not bad, \
+        f'{k}.stl not watertight after export: {bad} open edges, ' \
         f'{len(chk.split(only_watertight=False))} shells'
 
 # frontal area (projection on Y-Z, clipped to the part above ground)

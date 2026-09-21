@@ -25,11 +25,15 @@ try:
 except ImportError:
     print('skip STL check (trimesh not installed)')
 else:
+    def open_edges(m):
+        paired = trimesh.grouping.group_rows(m.edges_sorted, require_count=2)
+        return len(m.edges_sorted) - 2*len(paired)
+
     for name in ('rider', 'bike', 'wheel_rear', 'wheel_front'):
         m = trimesh.load(HERE / 'geometry' / f'{name}.stl')
-        broken = len(trimesh.repair.broken_faces(m))
-        if not m.is_watertight or broken:
-            fail.append(f'geometry/{name}.stl is not closed: {broken} broken faces')
+        bad = open_edges(m)
+        if not m.is_watertight or bad:
+            fail.append(f'geometry/{name}.stl is not closed: {bad} open edges')
         else:
             print(f'ok   geometry/{name}.stl watertight ({len(m.faces)} faces)')
 

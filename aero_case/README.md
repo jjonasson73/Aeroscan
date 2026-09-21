@@ -55,6 +55,11 @@ plus fit-koordinaterna `saddle_height_mm`, `saddle_setback_mm`, `effective_sta_d
     python build_model.py               # skriver ALLTID till geometry/ och model_info.json
     python overlay.py /sokvag/till/sidofoto.png     # → preview/overlay_side.png, preview/front_projection.png
     python tools/check_case.py          # axelpositioner + att STL:erna är slutna
+    python tools/render_views.py        # → preview/exposure.png, preview/silhouette_delta.png
+
+`render_views.py` färgar ytorna efter hur rakt de möter flödet och ritar frontarean för
+baseline mot en tunad position med skillnaden markerad. Allt kommer ur geometrin — det är
+alltså ingen CFD-data, men det är exakt den yta som bygger formmotståndet.
 
 `build_model.py` och `overlay.py` skriver relativt sin egen katalog, så de går att köra
 från vilken arbetskatalog som helst.
@@ -69,6 +74,73 @@ okalibrerade kroppen).
 Actions → **aero-delta** → Run workflow. Kör samma två positioner på två nätnivåer och
 skriver ut ett utslag. Absolutvärdena kommer inte att stämma mellan nivåerna – frågan är om
 de är överens om *skillnaden*. Är de inom 20 % är deltat nätkonvergerat.
+
+### Go/no-go-resultat 2026-09-21: GO
+`pad_drop_mm=-20`, 1500 iterationer med fast iterationsantal, 12.5 m/s, 4 kärnor:
+
+| nät | position | CdA [m²] | std | spridning |
+|---|---|---|---|---|
+| coarse | baseline | 0.1960 | 0.0012 | 0.59 % |
+| coarse | tunad | 0.1917 | 0.0005 | 0.28 % |
+| medium | baseline | 0.1935 | 0.0007 | 0.35 % |
+| medium | tunad | 0.1890 | 0.0011 | 0.60 % |
+
+**ΔCdA(coarse) = −0.0043 m² (−2.20 %), ΔCdA(medium) = −0.0045 m² (−2.34 %).**
+Skillnad mellan nätnivåerna: 0.0002 m², alltså 5 % av deltat. **Se körning 2 nedan innan du
+drar slutsatser av det talet** — den överensstämmelsen var delvis tur, och den verkliga
+körning-till-körning-spridningen visade sig vara 0.0010–0.0014 m².
+
+Korskontroll mot screeningen: `fit_sweep.py` gav −1.79 % frontarea för samma ändring,
+CFD:n ger −2.2 %. Skillnaden är att Cd också förbättrades något (0.566 → 0.564), alltså
+flatare rygg ger både mindre area och något bättre form. Rätt tecken, rimlig storlek.
+
+**Absolutvärdet är däremot för lågt.** CdA ≈ 0.19 och Cd ≈ 0.57 mot 0.20–0.25 respektive
+0.60–0.75 för en verklig TT-ryttare — och fotot visar lös t-shirt, mjukisbyxor, sneakers,
+ekerhjul och en rund hjälm, vilket i verkligheten drar uppåt. Modellen är för slät. Använd
+Δ, inte absolutvärdet.
+
+### Körning 2: pad_drop_mm=-10 saddle_fore_mm=10 saddle_up_mm=10 — GRÄNSFALL
+
+| nät | position | CdA [m²] | std |
+|---|---|---|---|
+| coarse | baseline | 0.1974 | 0.0006 |
+| coarse | tunad | 0.1886 | 0.0003 |
+| medium | baseline | 0.1945 | 0.0012 |
+| medium | tunad | 0.1899 | 0.0010 |
+
+ΔCdA(coarse) = −0.0088 m², ΔCdA(medium) = −0.0046 m². Skillnad 0.0042 m², alltså **48 %
+av deltat** — långt över 20 %-kriteriet.
+
+### Reproducerbarheten, som föll ut gratis
+Baseline-geometrin är **identisk** mellan de två körningarna, så skillnaden i baseline-CdA
+mäter hur reproducerbar hela kedjan är:
+
+| nät | körning 1 | körning 2 | skillnad |
+|---|---|---|---|
+| coarse | 0.1960 | 0.1974 | **+0.0014 m² (0.71 %)** |
+| medium | 0.1935 | 0.1945 | **+0.0010 m² (0.52 %)** |
+
+Ett identiskt case reproduceras alltså inte exakt. Parallell dekomposition och
+MPI-reduktion är inte bitreproducerbara, och snappyHexMesh kan nätta något olika beroende
+på lastbalans.
+
+**Detta reviderar felbudgeten.** Efter körning 1 stod här att nätbruset var 0.0002 m² och
+försumbart. Den siffran kom från en enda jämförelse och var för optimistisk:
+
+| felkälla | storlek |
+|---|---|
+| posevariation mellan foton | 0.005–0.007 m² |
+| **körning-till-körning, identiskt case** | **0.0010–0.0014 m²** |
+| nätnivå, stor ändring (körning 1) | 0.0002 m² |
+| nätnivå, liten ändring (körning 2) | 0.0042 m² |
+
+Två körningar som differentieras ger alltså ett delta med osäkerhet kring **±0.0017 m²**.
+Ett delta på 0.0045 är då knappt 3σ — detekterbart, men inte precist. **Upplösningsgränsen
+ligger runt 2 % CdA.** Under det är siffran en gissning.
+
+**Bättre försöksupplägg:** kör repliker på *en* nätnivå i stället för två olika nivåer. Samma
+kostnad, men ger ett riktigt felstapel i stället för en nätjämförelse som vi nu vet inte är
+det som begränsar.
 
 ### Δ-CdA: vad som faktiskt går att lita på
 28 mm padhöjd ≈ 2° ryggvinkel ≈ **2 % CdA**. Konvergenstoleransen är 0.2 %, alltså tio

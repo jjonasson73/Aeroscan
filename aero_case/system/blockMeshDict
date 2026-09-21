@@ -24,5 +24,8 @@ boundary
     outlet  { type patch; faces ((1 2 6 5)); }
     ground  { type wall;  faces ((0 3 2 1)); }
     top     { type symmetryPlane; faces ((4 5 6 7)); }
-    sides   { type symmetryPlane; faces ((0 1 5 4) (3 7 6 2)); }
+    // BÅDA sidorna ligger i samma patch, och symmetryPlane kräver att hela patchen är ETT
+    // plan: normalerna (0 -1 0) och (0 1 0) medelvärdesbildas till (0 0 0) och blockMesh
+    // avbryter. 'symmetry' är den allmänna varianten som klarar flera plan i samma patch.
+    sides   { type symmetry; faces ((0 1 5 4) (3 7 6 2)); }
 );

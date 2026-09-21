@@ -8,22 +8,19 @@ name: aero-delta
 on:
   workflow_dispatch:
     inputs:
-      param:
-        description: "FIT-parameter att ändra"
-        default: "pad_drop_mm"
-      delta:
-        description: "Ändringens storlek"
-        default: "-20"
+      fit:
+        description: "FIT-ändringen, mellanslagsseparerad (t.ex. pad_drop_mm=-10 saddle_fore_mm=10)"
+        default: "pad_drop_mm=-20"
       mesh_a:
         description: "Nätnivå A"
         type: choice
-        options: [quick, coarse, fine]
+        options: [quick, coarse, medium, fine]
         default: coarse
       mesh_b:
         description: "Nätnivå B (måste skilja sig från A)"
         type: choice
-        options: [quick, coarse, fine]
-        default: fine
+        options: [quick, coarse, medium, fine]
+        default: medium
       max_iterations:
         default: "1500"
       speed:
@@ -58,10 +55,15 @@ jobs:
           echo "NP=$(nproc)" >> $GITHUB_ENV
 
       - name: Build geometry
+        # FIT går via env, inte direkt ${{ }}-interpolation in i skriptkroppen. Oquoterad
+        # $FIT ordsplittas till flera argument, vilket är vad build_model.py vill ha, och
+        # en okänd parameter avbryter där i stället för att tyst bygga baseline.
+        env:
+          FIT: ${{ inputs.fit }}
         run: |
           pip install --quiet -r requirements.txt
           if [ "${{ matrix.pos }}" = "tuned" ]; then
-            python3 build_model.py ${{ inputs.param }}=${{ inputs.delta }}
+            python3 build_model.py $FIT
           else
             python3 build_model.py
           fi
@@ -71,16 +73,16 @@ jobs:
         run: |
           set +eu; source "$OF_BASHRC"; set -e
           bash tools/configure_case.sh "${{ matrix.mesh }}" "${{ inputs.speed }}" \
-                                       "${{ inputs.max_iterations }}" "$NP"
+                                       "${{ inputs.max_iterations }}" "$NP" fixed
 
       - name: Mesh and solve
         run: |
           set +eu; source "$OF_BASHRC"; set -e
           export OMPI_MCA_rmaps_base_oversubscribe=1
           bash Allmesh
-          grep -E "cells:|Mesh OK|Failed" log.checkMesh || true
+          echo "--- nät ---"; grep -E "cells:|Mesh OK|Failed|\*\*\*" log.checkMesh || true
           bash Allsolve
-          grep -i "runTimeControl\|End" log.simpleFoam | tail -n 3 || true
+          echo "--- lösare ---"; tail -n 6 log.simpleFoam || true
 
       - name: Collect
         if: always()
@@ -88,7 +90,7 @@ jobs:
           mkdir -p out
           cp -r postProcessing/CdA_* out/ 2>/dev/null || true
           cp model_info.json out/ 2>/dev/null || true
-          cp log.checkMesh log.simpleFoam out/ 2>/dev/null || true
+          cp log.* out/ 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -110,8 +112,10 @@ jobs:
       - name: Delta report
         run: |
           pip install --quiet numpy
+          # tee: utslaget måste synas i jobbloggen också, inte bara i sammanfattningen -
+          # sammanfattningen går inte att läsa via API:et.
           {
-            echo "## ${{ inputs.param }} = ${{ inputs.delta }} · ${{ inputs.mesh_a }} vs ${{ inputs.mesh_b }} · ${{ inputs.speed }} m/s"
+            echo "## ${{ inputs.fit }} · ${{ inputs.mesh_a }} vs ${{ inputs.mesh_b }} · ${{ inputs.speed }} m/s"
             echo
             python3 tools/delta_report.py results 150
-          } >> $GITHUB_STEP_SUMMARY
+          } | tee -a $GITHUB_STEP_SUMMARY
