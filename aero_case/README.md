@@ -70,6 +70,30 @@ Actions → **aero-delta** → Run workflow. Kör samma två positioner på två
 skriver ut ett utslag. Absolutvärdena kommer inte att stämma mellan nivåerna – frågan är om
 de är överens om *skillnaden*. Är de inom 20 % är deltat nätkonvergerat.
 
+### Go/no-go-resultat 2026-09-21: GO
+`pad_drop_mm=-20`, 1500 iterationer med fast iterationsantal, 12.5 m/s, 4 kärnor:
+
+| nät | position | CdA [m²] | std | spridning |
+|---|---|---|---|---|
+| coarse | baseline | 0.1960 | 0.0012 | 0.59 % |
+| coarse | tunad | 0.1917 | 0.0005 | 0.28 % |
+| medium | baseline | 0.1935 | 0.0007 | 0.35 % |
+| medium | tunad | 0.1890 | 0.0011 | 0.60 % |
+
+**ΔCdA(coarse) = −0.0043 m² (−2.20 %), ΔCdA(medium) = −0.0045 m² (−2.34 %).**
+Skillnad mellan nätnivåerna: 0.0002 m², alltså 5 % av deltat. Deltat är nätkonvergerat
+trots att absolutvärdena skiljer sig — pipelinen kan rangordna positioner av den här
+storleken.
+
+Korskontroll mot screeningen: `fit_sweep.py` gav −1.79 % frontarea för samma ändring,
+CFD:n ger −2.2 %. Skillnaden är att Cd också förbättrades något (0.566 → 0.564), alltså
+flatare rygg ger både mindre area och något bättre form. Rätt tecken, rimlig storlek.
+
+**Absolutvärdet är däremot för lågt.** CdA ≈ 0.19 och Cd ≈ 0.57 mot 0.20–0.25 respektive
+0.60–0.75 för en verklig TT-ryttare — och fotot visar lös t-shirt, mjukisbyxor, sneakers,
+ekerhjul och en rund hjälm, vilket i verkligheten drar uppåt. Modellen är för slät. Använd
+Δ, inte absolutvärdet.
+
 ### Δ-CdA: vad som faktiskt går att lita på
 28 mm padhöjd ≈ 2° ryggvinkel ≈ **2 % CdA**. Konvergenstoleransen är 0.2 %, alltså tio
 gånger under signalen. Det som kan dränka den är **nätbruset**: varje position ger ny STL
