@@ -65,6 +65,11 @@ Aref = 1 → `Cd` i postProcessing/CdA_*/ är direkt **CdA [m²]**, uppdelat på
 Projicerad frontarea för modellen: 0.346 m² (efter masskalibreringen; var 0.361 med den
 okalibrerade kroppen).
 
+### Go/no-go innan du litar på något delta
+Actions → **aero-delta** → Run workflow. Kör samma två positioner på två nätnivåer och
+skriver ut ett utslag. Absolutvärdena kommer inte att stämma mellan nivåerna – frågan är om
+de är överens om *skillnaden*. Är de inom 20 % är deltat nätkonvergerat.
+
 ### Δ-CdA: vad som faktiskt går att lita på
 28 mm padhöjd ≈ 2° ryggvinkel ≈ **2 % CdA**. Konvergenstoleransen är 0.2 %, alltså tio
 gånger under signalen. Det som kan dränka den är **nätbruset**: varje position ger ny STL
@@ -74,6 +79,14 @@ absolutvärdena inte är det. `quick` är för att röktesta pipelinen, inte fö
 
 Allt detta är vid 0° yaw. Verklig CdA domineras av 5–15° yaw, och en position som vinner
 rakt framifrån vinner inte nödvändigtvis i sidvind.
+
+**Fotografera inte om för varje position.** 1° ryggvinkel ≈ 0.0035 m² frontarea ≈ 0.0024 m²
+CdA – ungefär vad 10 mm padhöjd är värd. Posevariationen mellan två foton av "samma"
+position är 2–3°, alltså större än ändringen du testar, och felet är oberoende mellan foton
+så det adderas i stället för att ta ut sig. Ta **ett** baselinefotopar och ändra positionen
+via `FIT`. Då är landmärken, kropp och tyg identiska och bara det du ville ändra skiljer.
+Fotot på den tunade positionen har en annan roll: kontrollera att du faktiskt intog den pose
+modellen förutsade.
 
 ## Begränsningar
 - Kroppen är byggd av ellipsoider/konvexa skal – ger rätt volym/siluett, inte veck i löst tyg

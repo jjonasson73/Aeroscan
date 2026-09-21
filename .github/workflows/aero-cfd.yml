@@ -41,52 +41,12 @@ jobs:
       - name: Configure case
         run: |
           set +eu; source "$OF_BASHRC"; set -e
-          S=system/snappyHexMeshDict
-          foamDictionary -entry numberOfSubdomains -set $NP system/decomposeParDict
-          foamDictionary -entry endTime       -set ${{ inputs.max_iterations }} system/controlDict
-          foamDictionary -entry writeInterval -set ${{ inputs.max_iterations }} system/controlDict
-
-          # U, the turbulence inlet (k, omega) and the wheel rotation all follow from the
-          # one speed input; previously k and omega stayed pinned at their 12.5 m/s values.
-          U=${{ inputs.speed }}
-          read OMEGA TKE TOMEGA <<<"$(python3 tools/inlet_conditions.py $U)"
-          foamDictionary -entry Uinlet    -set "($U 0 0)" 0/include/initialConditions
-          foamDictionary -entry turbKE    -set "$TKE"     0/include/initialConditions
-          foamDictionary -entry turbOmega -set "$TOMEGA"  0/include/initialConditions
-          foamDictionary -entry boundaryField/wheel_rear/omega  -set "$OMEGA" 0/U
-          foamDictionary -entry boundaryField/wheel_front/omega -set "$OMEGA" 0/U
-          foamDictionary -entry functions/forceDefaults/magUInf -set "$U" system/controlDict
-
-          # Mesh resolution. foamDictionary edits the dictionary structure, so these cannot
-          # silently no-op the way a pattern-matching sed does when the file is reformatted.
-          case "${{ inputs.mesh }}" in
-            quick|coarse)
-              for pat in rider bike wheel_rear wheel_front; do
-                foamDictionary -entry castellatedMeshControls/refinementSurfaces/$pat/level -set "(4 5)" $S
-              done
-              foamDictionary -entry castellatedMeshControls/features -set \
-                '({file "rider.eMesh"; level 5;} {file "bike.eMesh"; level 5;} {file "wheel_rear.eMesh"; level 5;} {file "wheel_front.eMesh"; level 5;})' $S
-              foamDictionary -entry castellatedMeshControls/refinementRegions/nearBox/levels -set "((1E15 3))" $S
-              foamDictionary -entry castellatedMeshControls/refinementRegions/wakeBox/levels -set "((1E15 2))" $S ;;
-          esac
-          if [ "${{ inputs.mesh }}" = "quick" ]; then
-            foamDictionary -entry addLayers -set false $S                        # Spalding klarar hög y+
-            foamDictionary -entry geometry/wakeBox/max -set "(2.5 0.7 1.8)" $S   # kortare vakbox
-          fi
-
-          echo "--- effective configuration ---"
-          echo "U = $U m/s | k = $TKE | omega_inlet = $TOMEGA | omega_wheel = $OMEGA rad/s"
-          for e in addLayers castellatedMeshControls/features \
-                   castellatedMeshControls/refinementSurfaces/rider/level \
-                   castellatedMeshControls/refinementRegions/nearBox/levels \
-                   castellatedMeshControls/refinementRegions/wakeBox/levels \
-                   geometry/wakeBox/max; do
-            echo "$e = $(foamDictionary -entry $e -value $S | tr -d '\n')"
-          done
+          bash tools/configure_case.sh "${{ inputs.mesh }}" "${{ inputs.speed }}" \
+                                       "${{ inputs.max_iterations }}" "$NP"
 
       - name: Check case consistency
         run: |
-          pip install --quiet trimesh numpy scipy
+          pip install --quiet -r requirements.txt
           python3 tools/check_case.py
 
       - name: Restore cached mesh
