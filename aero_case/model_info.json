@@ -2,6 +2,27 @@
  "scale_mm_per_px": 1.5555555555555556,
  "wheelbase_mm": 981.5111805429748,
  "bb_height_mm": 247.98756886559698,
+ "yaw_deg": 0.0,
+ "wheel_axis": [
+  0.0,
+  -1.0,
+  0.0
+ ],
+ "drag_dir": [
+  1.0,
+  0.0,
+  0.0
+ ],
+ "lift_dir": [
+  0.0,
+  0.0,
+  1.0
+ ],
+ "pitch_axis": [
+  0.0,
+  1.0,
+  0.0
+ ],
  "wheel_radius_m": 0.336,
  "axle_rear_m": [
   0.4,

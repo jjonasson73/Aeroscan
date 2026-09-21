@@ -1,31 +1,45 @@
-# Go/no-go: kan pipelinen lösa upp en positionsändring, eller dränks den i nätbrus?
+# Håller positionsvinsten i sidvind, eller bara i stilla luft?
 #
-# Kör samma två positioner på två nätnivåer. Absolutvärdena kommer INTE att stämma mellan
-# nivåerna - det är väntat för en trubbig kropp vid de här cellantalen. Frågan är om de är
-# överens om SKILLNADEN. Är de det är deltat nätkonvergerat och positioner går att rangordna.
-name: aero-delta
+# Ingen åker på en fast yaw-vinkel. Vinkeln följer av åkfart och vind, och vid 40 km/h ger
+# redan 10 km/h sidvind omkring 14 grader. CdA kan skilja betydligt mer mellan 0 och 15
+# grader än mellan två sittpositioner, så en position som vinner rakt fram vinner inte
+# automatiskt på en blåsig dag. Svepet kör båda positionerna vid varje vinkel och räknar om
+# resultatet till medeleffekt över ett varv.
+#
+# Yaw görs genom att VRIDA GEOMETRIN, inte inloppet. Vrids flödet i stället far vaken snett
+# ut ur domänen - 10 m nedströms vid 15 grader är 2.7 m i sidled, bredare än domänens halva
+# bredd - och sidorna kan inte längre vara symmetriplan. Med kroppen vriden ligger vaken kvar
+# längs domänens långa axel.
+name: aero-yaw
 
 on:
   workflow_dispatch:
     inputs:
       fit:
-        description: "FIT-ändringen, mellanslagsseparerad (t.ex. pad_drop_mm=-10 saddle_fore_mm=10)"
-        default: "pad_drop_mm=-20"
+        description: "FIT-ändringen som ska jämföras mot baseline"
+        default: "pad_drop_mm=-10 saddle_fore_mm=10 saddle_up_mm=6"
+      yaw_angles:
+        description: "Vinklar [grader]. Cyklisten är inte spegelsymmetrisk (ett ben fram, kedja på höger sida), så båda tecknen är strängare - och dubbelt så många jobb."
+        type: choice
+        options:
+          - '[0,5,10,15]'
+          - '[0,10]'
+          - '[0,5,10,15,20]'
+          - '[-15,-10,-5,0,5,10,15]'
+        default: '[0,5,10,15]'
       mesh:
         description: "Nätnivå"
         type: choice
         options: [quick, coarse, medium, fine]
         default: medium
-      replicates:
-        description: "Repliker per position. Identiska case reproduceras inte exakt, så flera repliker ger ett felstapel i stället för en siffra utan osäkerhet."
-        type: choice
-        options: ['[1]', '[1,2]', '[1,2,3]']
-        default: '[1,2]' 
       max_iterations:
         default: "1500"
       speed:
-        description: "Hastighet [m/s]"
+        description: "Hastighet [m/s] - luftens fart, densamma vid alla vinklar"
         default: "12.5"
+      ride_speed_kmh:
+        description: "Åkfart för omräkningen till CdA_eff"
+        default: "40"
       of_version:
         default: "2506"
 
@@ -34,9 +48,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rep: ${{ fromJSON(inputs.replicates) }}
+        yaw: ${{ fromJSON(inputs.yaw_angles) }}
         pos: [base, tuned]
-    name: r${{ matrix.rep }}-${{ matrix.pos }}
+    name: y${{ matrix.yaw }}-${{ matrix.pos }}
     runs-on: ubuntu-24.04
     timeout-minutes: 355
     defaults:
@@ -56,24 +70,28 @@ jobs:
 
       - name: Build geometry
         # FIT går via env, inte direkt ${{ }}-interpolation in i skriptkroppen. Oquoterad
-        # $FIT ordsplittas till flera argument, vilket är vad build_model.py vill ha, och
-        # en okänd parameter avbryter där i stället för att tyst bygga baseline.
+        # $FIT ordsplittas till flera argument, vilket är vad build_model.py vill ha.
         env:
           FIT: ${{ inputs.fit }}
+          YAW: ${{ matrix.yaw }}
         run: |
           pip install --quiet -r requirements.txt
           if [ "${{ matrix.pos }}" = "tuned" ]; then
-            python3 build_model.py $FIT
+            python3 build_model.py $FIT "yaw_deg=$YAW"
           else
-            python3 build_model.py
+            python3 build_model.py "yaw_deg=$YAW"
           fi
           python3 tools/check_case.py
 
       - name: Configure case
+        # "wide" ger breda förfiningsboxar vid ALLA vinklar, noll inräknad. En mesh som
+        # ändrar sig med vinkeln lägger nätbrus rakt in i den trend svepet ska mäta.
         run: |
           set +eu; source "$OF_BASHRC"; set -e
           bash tools/configure_case.sh "${{ inputs.mesh }}" "${{ inputs.speed }}" \
-                                       "${{ inputs.max_iterations }}" "$NP" fixed
+                                       "${{ inputs.max_iterations }}" "$NP" fixed wide
+          echo "--- efter konfiguration ---"
+          python3 tools/check_case.py
 
       - name: Mesh and solve
         run: |
@@ -95,7 +113,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r${{ matrix.rep }}-${{ matrix.pos }}
+          name: y${{ matrix.yaw }}-${{ matrix.pos }}
           path: aero_case/out
           retention-days: 30
 
@@ -109,13 +127,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { path: aero_case/results }
-      - name: Delta report
+      - name: Yaw report
         run: |
           pip install --quiet numpy
-          # tee: utslaget måste synas i jobbloggen också, inte bara i sammanfattningen -
-          # sammanfattningen går inte att läsa via API:et.
+          # tee: utslaget måste synas i jobbloggen också - sammanfattningen går inte att
+          # läsa via API:et.
           {
-            echo "## ${{ inputs.fit }} · ${{ inputs.mesh }} · ${{ inputs.speed }} m/s · repliker ${{ inputs.replicates }}"
+            echo "## ${{ inputs.fit }} · yaw ${{ inputs.yaw_angles }} · ${{ inputs.mesh }} · ${{ inputs.speed }} m/s"
             echo
-            python3 tools/delta_report.py results 150 replik
+            python3 tools/yaw_report.py results 150 "${{ inputs.ride_speed_kmh }}"
           } | tee -a $GITHUB_STEP_SUMMARY
