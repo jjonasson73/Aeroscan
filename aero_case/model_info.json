@@ -2,9 +2,20 @@
  "scale_mm_per_px": 1.5555555555555556,
  "wheelbase_mm": 981.5111805429748,
  "bb_height_mm": 247.98756886559698,
+ "wheel_radius_m": 0.336,
+ "axle_rear_m": [
+  0.4,
+  0.0,
+  0.333
+ ],
+ "axle_front_m": [
+  -0.581511,
+  0.0,
+  0.333
+ ],
  "helmet_top_mm": 1369.2831988573298,
  "helmet_length_mm": 315.6367383231826,
- "frontal_area_m2": 0.36140925369497656,
+ "frontal_area_m2": 0.34641166281875124,
  "bbox_m": [
   [
    -0.9175111651420593,
@@ -14,14 +25,64 @@
   [
    0.7360000014305115,
    0.2070000022649765,
-   1.3693044185638428
+   1.3794409036636353
   ]
  ],
+ "rider": {
+  "height_mm": 1750.0,
+  "mass_kg": 69.0
+ },
+ "fit": {
+  "pad_drop_mm": 0.0,
+  "pad_reach_mm": 0.0,
+  "saddle_fore_mm": 0.0,
+  "saddle_up_mm": 0.0,
+  "head_pitch_deg": 0.0,
+  "crank_angle_deg": null
+ },
+ "girth_scale": 0.9075,
+ "hip_drop_mm": 37.9,
+ "rider_volume_m3": 0.0683725858532779,
+ "rider_implied_mass_kg": 69.05631171181068,
+ "fit_angles": {
+  "back_deg": 15.7,
+  "torso_deg": 25.7,
+  "forearm_deg": 28.3,
+  "trunk_pitch_vs_photo_deg": -0.0,
+  "hip_closed_deg": 57.6,
+  "knee_bottom_deg": 145.1,
+  "shoulder_deg": 71.4,
+  "elbow_deg": 68.9,
+  "saddle_height_mm": 694.3,
+  "saddle_setback_mm": 154.5,
+  "effective_sta_deg": 77.1,
+  "pad_stack_mm": 713.0,
+  "pad_reach_mm": 438.7,
+  "saddle_to_pad_drop_mm": -36.1,
+  "grip_rise_mm": 152.9
+ },
+ "segments": {
+  "trunk_photo_mm": 544.7,
+  "trunk_winter_mm": 504.0,
+  "upper_arm_photo_mm": 269.8,
+  "upper_arm_winter_mm": 325.5,
+  "forearm_photo_mm": 322.9,
+  "forearm_winter_mm": 255.5,
+  "thigh_winter_mm": 428.8,
+  "shank_winter_mm": 430.5,
+  "forearm_residual_mm": 0.0
+ },
+ "knee_ik_mm": [
+  246.1,
+  -104.5,
+  748.7
+ ],
+ "knee_residual_mm": 78.4,
  "n_faces": {
-  "rider": 17218,
-  "bike": 36996,
-  "wheel_rear": 16400,
-  "wheel_front": 16400
+  "rider": 17806,
+  "bike": 36950,
+  "wheel_rear": 15696,
+  "wheel_front": 15700
  },
  "landmarks_mm": {
   "bb": [

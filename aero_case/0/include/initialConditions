@@ -1,0 +1,19 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  AeroScan: single source of truth for the inlet condition.
+
+  Everything downstream of the speed lives here so a speed change cannot leave k and
+  omega behind at the old value. The CI workflow rewrites this one file.
+
+    Uinlet     free-stream speed [m/s]        (12.5 m/s = 45 km/h)
+    turbKE     k     = 1.5*(U*I)^2            with turbulence intensity I = 1%
+    turbOmega  omega = sqrt(k)/(Cmu^0.25 * L) with Cmu = 0.09, length scale L = 0.1 m
+
+  NOTE: the wheel rotation rate in 0/U is U/R_tyre with R_tyre = 0.336 m and must be
+  changed together with Uinlet, as must magUInf in system/controlDict.
+\*---------------------------------------------------------------------------*/
+
+Uinlet          (12.5 0 0);
+turbKE          0.02344;
+turbOmega       2.7951;
+
+// ************************************************************************* //

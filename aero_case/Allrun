@@ -1,4 +1,4 @@
 #!/bin/sh
-cd "${0%/*}" || exit
+cd "$(dirname "$0")" || exit   # robust oavsett om skriptet körs som ./Allmesh, bash Allmesh eller med full sökväg
 ./Allmesh && ./Allsolve
 echo "CdA [m^2] = Cd i postProcessing/CdA_total/0/coefficient.dat (Aref = 1)"

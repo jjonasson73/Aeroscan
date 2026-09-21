@@ -1,0 +1,117 @@
+# Go/no-go: kan pipelinen lösa upp en positionsändring, eller dränks den i nätbrus?
+#
+# Kör samma två positioner på två nätnivåer. Absolutvärdena kommer INTE att stämma mellan
+# nivåerna - det är väntat för en trubbig kropp vid de här cellantalen. Frågan är om de är
+# överens om SKILLNADEN. Är de det är deltat nätkonvergerat och positioner går att rangordna.
+name: aero-delta
+
+on:
+  workflow_dispatch:
+    inputs:
+      param:
+        description: "FIT-parameter att ändra"
+        default: "pad_drop_mm"
+      delta:
+        description: "Ändringens storlek"
+        default: "-20"
+      mesh_a:
+        description: "Nätnivå A"
+        type: choice
+        options: [quick, coarse, fine]
+        default: coarse
+      mesh_b:
+        description: "Nätnivå B (måste skilja sig från A)"
+        type: choice
+        options: [quick, coarse, fine]
+        default: fine
+      max_iterations:
+        default: "1500"
+      speed:
+        description: "Hastighet [m/s]"
+        default: "12.5"
+      of_version:
+        default: "2506"
+
+jobs:
+  run:
+    strategy:
+      fail-fast: false
+      matrix:
+        mesh: ${{ fromJSON(format('["{0}","{1}"]', inputs.mesh_a, inputs.mesh_b)) }}
+        pos: [base, tuned]
+    name: ${{ matrix.mesh }}-${{ matrix.pos }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    defaults:
+      run:
+        shell: bash
+        working-directory: aero_case
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenFOAM
+        working-directory: .
+        run: |
+          curl -s https://dl.openfoam.com/add-debian-repo.sh | sudo bash
+          sudo apt-get install -y --no-install-recommends openfoam${{ inputs.of_version }}-default
+          echo "OF_BASHRC=/usr/lib/openfoam/openfoam${{ inputs.of_version }}/etc/bashrc" >> $GITHUB_ENV
+          echo "NP=$(nproc)" >> $GITHUB_ENV
+
+      - name: Build geometry
+        run: |
+          pip install --quiet -r requirements.txt
+          if [ "${{ matrix.pos }}" = "tuned" ]; then
+            python3 build_model.py ${{ inputs.param }}=${{ inputs.delta }}
+          else
+            python3 build_model.py
+          fi
+          python3 tools/check_case.py
+
+      - name: Configure case
+        run: |
+          set +eu; source "$OF_BASHRC"; set -e
+          bash tools/configure_case.sh "${{ matrix.mesh }}" "${{ inputs.speed }}" \
+                                       "${{ inputs.max_iterations }}" "$NP"
+
+      - name: Mesh and solve
+        run: |
+          set +eu; source "$OF_BASHRC"; set -e
+          export OMPI_MCA_rmaps_base_oversubscribe=1
+          bash Allmesh
+          grep -E "cells:|Mesh OK|Failed" log.checkMesh || true
+          bash Allsolve
+          grep -i "runTimeControl\|End" log.simpleFoam | tail -n 3 || true
+
+      - name: Collect
+        if: always()
+        run: |
+          mkdir -p out
+          cp -r postProcessing/CdA_* out/ 2>/dev/null || true
+          cp model_info.json out/ 2>/dev/null || true
+          cp log.checkMesh log.simpleFoam out/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.mesh }}-${{ matrix.pos }}
+          path: aero_case/out
+          retention-days: 30
+
+  verdict:
+    needs: run
+    if: always()
+    runs-on: ubuntu-24.04
+    defaults:
+      run: { shell: bash, working-directory: aero_case }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: aero_case/results }
+      - name: Delta report
+        run: |
+          pip install --quiet numpy
+          {
+            echo "## ${{ inputs.param }} = ${{ inputs.delta }} · ${{ inputs.mesh_a }} vs ${{ inputs.mesh_b }} · ${{ inputs.speed }} m/s"
+            echo
+            python3 tools/delta_report.py results 150
+          } >> $GITHUB_STEP_SUMMARY

@@ -11,38 +11,38 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-Uinlet          (12.5 0 0);
+#include "include/initialConditions"
 dimensions      [0 2 -2 0 0 0 0];
-internalField   uniform 0.02344;
+internalField   uniform $turbKE;
 boundaryField
 {
     #includeEtc "caseDicts/setConstraintTypes"
     inlet
     {
-        type fixedValue; value uniform 0.02344;
+        type fixedValue; value uniform $turbKE;
     }
     outlet
     {
-        type inletOutlet; inletValue uniform 0.02344; value uniform 0.02344;
+        type inletOutlet; inletValue uniform $turbKE; value uniform $turbKE;
     }
     ground
     {
-        type kqRWallFunction; value uniform 0.02344;
+        type kqRWallFunction; value uniform $turbKE;
     }
     rider
     {
-        type kqRWallFunction; value uniform 0.02344;
+        type kqRWallFunction; value uniform $turbKE;
     }
     bike
     {
-        type kqRWallFunction; value uniform 0.02344;
+        type kqRWallFunction; value uniform $turbKE;
     }
     wheel_rear
     {
-        type kqRWallFunction; value uniform 0.02344;
+        type kqRWallFunction; value uniform $turbKE;
     }
     wheel_front
     {
-        type kqRWallFunction; value uniform 0.02344;
+        type kqRWallFunction; value uniform $turbKE;
     }
 }

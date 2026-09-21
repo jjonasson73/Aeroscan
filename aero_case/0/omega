@@ -11,38 +11,38 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-Uinlet          (12.5 0 0);
+#include "include/initialConditions"
 dimensions      [0 0 -1 0 0 0 0];
-internalField   uniform 2.7951;
+internalField   uniform $turbOmega;
 boundaryField
 {
     #includeEtc "caseDicts/setConstraintTypes"
     inlet
     {
-        type fixedValue; value uniform 2.7951;
+        type fixedValue; value uniform $turbOmega;
     }
     outlet
     {
-        type inletOutlet; inletValue uniform 2.7951; value uniform 2.7951;
+        type inletOutlet; inletValue uniform $turbOmega; value uniform $turbOmega;
     }
     ground
     {
-        type omegaWallFunction; value uniform 2.7951;
+        type omegaWallFunction; value uniform $turbOmega;
     }
     rider
     {
-        type omegaWallFunction; value uniform 2.7951;
+        type omegaWallFunction; value uniform $turbOmega;
     }
     bike
     {
-        type omegaWallFunction; value uniform 2.7951;
+        type omegaWallFunction; value uniform $turbOmega;
     }
     wheel_rear
     {
-        type omegaWallFunction; value uniform 2.7951;
+        type omegaWallFunction; value uniform $turbOmega;
     }
     wheel_front
     {
-        type omegaWallFunction; value uniform 2.7951;
+        type omegaWallFunction; value uniform $turbOmega;
     }
 }

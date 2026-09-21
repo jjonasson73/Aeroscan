@@ -8,6 +8,10 @@ aero_case/*.OpenFOAM
 aero_case/constant/polyMesh/
 aero_case/constant/triSurface/
 aero_case/constant/extendedFeatureEdgeMesh/
+# härledd hjälpgeometri (bara overlay.py + frontarea använder den, 4 MB)
+aero_case/geometry/rider_bike_full.stl
+# STL:er i case-roten = någon körde build_model.py med en gammal version
+aero_case/*.stl
 # tidskataloger (1, 500, 1500 ...) men behåll 0/
 aero_case/[1-9]*/
 

@@ -18,6 +18,12 @@ on:
       of_version:
         description: "OpenFOAM ESI-version (apt: openfoamXXXX-default)"
         default: "2506"
+      fit_param:
+        description: "FIT-parameter att ändra (tomt = baseline)"
+        default: ""
+      fit_delta:
+        description: "Ändringens storlek"
+        default: ""
 
 jobs:
   cfd:
@@ -38,26 +44,21 @@ jobs:
           echo "OF_BASHRC=/usr/lib/openfoam/openfoam${{ inputs.of_version }}/etc/bashrc" >> $GITHUB_ENV
           echo "NP=$(nproc)" >> $GITHUB_ENV
 
+      - name: Build geometry
+        run: |
+          pip install --quiet -r requirements.txt
+          if [ -n "${{ inputs.fit_param }}" ]; then
+            python3 build_model.py ${{ inputs.fit_param }}=${{ inputs.fit_delta }}
+          else
+            python3 build_model.py
+          fi
+          python3 tools/check_case.py
+
       - name: Configure case
         run: |
           set +eu; source "$OF_BASHRC"; set -e
-          S=system/snappyHexMeshDict
-          foamDictionary -entry numberOfSubdomains -set $NP system/decomposeParDict
-          foamDictionary -entry endTime       -set ${{ inputs.max_iterations }} system/controlDict
-          foamDictionary -entry writeInterval -set ${{ inputs.max_iterations }} system/controlDict
-          U=${{ inputs.speed }}; OMEGA=$(python3 -c "print(round($U/0.336,3))")
-          sed -i "s/^Uinlet .*/Uinlet          ($U 0 0);/; s/omega           [0-9.]*;/omega           $OMEGA;/" 0/U
-          sed -i "s/magUInf         [0-9.]*;/magUInf         $U;/" system/controlDict
-          case "${{ inputs.mesh }}" in
-            quick|coarse)
-              sed -i 's/level (5 6)/level (4 5)/; s/level 6;/level 5;/' $S
-              sed -i 's/levels ((1E15 4))/levels ((1E15 3))/; s/levels ((1E15 3)); }   \/\/ 31 mm/levels ((1E15 2)); }/' $S ;;
-          esac
-          if [ "${{ inputs.mesh }}" = "quick" ]; then
-            sed -i 's/^addLayers       true;/addLayers       false;/' $S          # Spalding-väggfunktion klarar hög y+
-            sed -i 's/max (4.5 0.8 2.0)/max (2.5 0.7 1.8)/' $S                  # kortare vakbox
-          fi
-          grep -E "addLayers|level|wakeBox" $S
+          bash tools/configure_case.sh "${{ inputs.mesh }}" "${{ inputs.speed }}" \
+                                       "${{ inputs.max_iterations }}" "$NP"
 
       - name: Restore cached mesh
         id: meshcache
@@ -67,7 +68,7 @@ jobs:
             aero_case/processor*/constant
             aero_case/constant/polyMesh
             aero_case/log.checkMesh
-          key: mesh-${{ inputs.mesh }}-np${{ env.NP }}-${{ hashFiles('aero_case/geometry/rider.stl','aero_case/geometry/bike.stl','aero_case/geometry/wheel_*.stl','aero_case/system/snappyHexMeshDict','aero_case/system/blockMeshDict','aero_case/system/surfaceFeatureExtractDict') }}
+          key: mesh-${{ inputs.mesh }}-${{ inputs.fit_param }}${{ inputs.fit_delta }}-np${{ env.NP }}-${{ hashFiles('aero_case/geometry/rider.stl','aero_case/geometry/bike.stl','aero_case/geometry/wheel_*.stl','aero_case/system/snappyHexMeshDict','aero_case/system/blockMeshDict','aero_case/system/surfaceFeatureExtractDict') }}
 
       - name: Mesh
         if: steps.meshcache.outputs.cache-hit != 'true'
@@ -105,13 +106,10 @@ jobs:
       - name: CdA summary
         if: always()
         run: |
-          echo "### ${{ inputs.mesh }}, ${{ inputs.speed }} m/s, ${NP} kärnor" >> $GITHUB_STEP_SUMMARY
-          echo "| Del | CdA [m²] | std, sista 150 it | iterationer |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|---|---|" >> $GITHUB_STEP_SUMMARY
-          for f in postProcessing/CdA_*/0/coefficient.dat; do
-            n=$(basename $(dirname $(dirname $f)))
-            python3 -c "import sys,numpy as np; d=np.loadtxt(sys.argv[1],comments='#'); c=d[-150:,1]; print(f'| {sys.argv[2]} | {c.mean():.4f} | {c.std():.4f} | {int(d[-1,0])} |')" "$f" "$n" >> $GITHUB_STEP_SUMMARY
-          done
+          {
+            echo "### ${{ inputs.mesh }}, ${{ inputs.speed }} m/s, ${NP} kärnor"
+            python3 tools/cda_summary.py 150
+          } >> $GITHUB_STEP_SUMMARY
 
       - uses: actions/upload-artifact@v4
         if: always()
