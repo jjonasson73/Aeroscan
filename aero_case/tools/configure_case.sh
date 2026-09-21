@@ -24,7 +24,23 @@ foamDictionary -entry turbKE    -set "$TKE"     0/include/initialConditions
 foamDictionary -entry turbOmega -set "$TOMEGA"  0/include/initialConditions
 foamDictionary -entry boundaryField/wheel_rear/omega  -set "$OMEGA" 0/U
 foamDictionary -entry boundaryField/wheel_front/omega -set "$OMEGA" 0/U
-foamDictionary -entry functions/forceDefaults/magUInf -set "$U" system/controlDict
+# magUInf sitter i forceDefaults, som är en TOPPNIVÅ-post som de fyra function objects
+# drar in med $forceDefaults. foamDictionary -set skriver om hela filen med makrot
+# expanderat, så efter första skrivningen ovan (endTime) har var och en sin egen kopia och
+# forceDefaults/magUInf når dem inte längre. Därför sätts den på varje function object,
+# och vi läser tillbaka för att bevisa att den tog.
+n_set=0
+for fo in forceDefaults functions/CdA_total functions/CdA_rider functions/CdA_bike functions/CdA_wheels; do
+  if foamDictionary -entry "$fo/magUInf" -set "$U" system/controlDict >/dev/null 2>&1; then
+    n_set=$((n_set + 1))
+  fi
+done
+got=$(foamDictionary -entry functions/CdA_total/magUInf -value system/controlDict 2>/dev/null | tr -d '[:space:];')
+if [ "$got" != "$U" ]; then
+  echo "magUInf sattes inte: CdA_total har '$got', ville ha '$U' (lyckades på $n_set ställen)" >&2
+  exit 1
+fi
+echo "magUInf = $got satt på $n_set ställen i controlDict"
 
 # Mesh resolution. foamDictionary edits the dictionary structure, so these cannot silently
 # no-op the way a pattern-matching sed does when the file is reformatted.
