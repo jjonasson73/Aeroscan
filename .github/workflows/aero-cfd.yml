@@ -18,6 +18,12 @@ on:
       of_version:
         description: "OpenFOAM ESI-version (apt: openfoamXXXX-default)"
         default: "2506"
+      fit_param:
+        description: "FIT-parameter att ändra (tomt = baseline)"
+        default: ""
+      fit_delta:
+        description: "Ändringens storlek"
+        default: ""
 
 jobs:
   cfd:
@@ -38,16 +44,21 @@ jobs:
           echo "OF_BASHRC=/usr/lib/openfoam/openfoam${{ inputs.of_version }}/etc/bashrc" >> $GITHUB_ENV
           echo "NP=$(nproc)" >> $GITHUB_ENV
 
+      - name: Build geometry
+        run: |
+          pip install --quiet -r requirements.txt
+          if [ -n "${{ inputs.fit_param }}" ]; then
+            python3 build_model.py ${{ inputs.fit_param }}=${{ inputs.fit_delta }}
+          else
+            python3 build_model.py
+          fi
+          python3 tools/check_case.py
+
       - name: Configure case
         run: |
           set +eu; source "$OF_BASHRC"; set -e
           bash tools/configure_case.sh "${{ inputs.mesh }}" "${{ inputs.speed }}" \
                                        "${{ inputs.max_iterations }}" "$NP"
-
-      - name: Check case consistency
-        run: |
-          pip install --quiet -r requirements.txt
-          python3 tools/check_case.py
 
       - name: Restore cached mesh
         id: meshcache
@@ -57,7 +68,7 @@ jobs:
             aero_case/processor*/constant
             aero_case/constant/polyMesh
             aero_case/log.checkMesh
-          key: mesh-${{ inputs.mesh }}-np${{ env.NP }}-${{ hashFiles('aero_case/geometry/rider.stl','aero_case/geometry/bike.stl','aero_case/geometry/wheel_*.stl','aero_case/system/snappyHexMeshDict','aero_case/system/blockMeshDict','aero_case/system/surfaceFeatureExtractDict') }}
+          key: mesh-${{ inputs.mesh }}-${{ inputs.fit_param }}${{ inputs.fit_delta }}-np${{ env.NP }}-${{ hashFiles('aero_case/geometry/rider.stl','aero_case/geometry/bike.stl','aero_case/geometry/wheel_*.stl','aero_case/system/snappyHexMeshDict','aero_case/system/blockMeshDict','aero_case/system/surfaceFeatureExtractDict') }}
 
       - name: Mesh
         if: steps.meshcache.outputs.cache-hit != 'true'
