@@ -135,5 +135,7 @@ jobs:
           {
             echo "## ${{ inputs.fit }} · yaw ${{ inputs.yaw_angles }} · ${{ inputs.mesh }} · ${{ inputs.speed }} m/s"
             echo
-            python3 tools/yaw_report.py results 150 "${{ inputs.ride_speed_kmh }}"
+            # 400 iterationers fönster, inte 150. Vid yaw svänger kraften och ett kort
+            # fönster ger ett stickprov ur svängningen i stället för ett medelvärde.
+            python3 tools/yaw_report.py results 400 "${{ inputs.ride_speed_kmh }}"
           } | tee -a $GITHUB_STEP_SUMMARY
