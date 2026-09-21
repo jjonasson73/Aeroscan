@@ -193,7 +193,7 @@ och nytt snappy-nät. Innan du litar på ett delta – kör samma två positione
 absolutvärdena inte är det. `quick` är för att röktesta pipelinen, inte för att jämföra.
 
 Allt detta är vid 0° yaw. Verklig CdA domineras av 5–15° yaw, och en position som vinner
-rakt framifrån vinner inte nödvändigtvis i sidvind.
+rakt framifrån vinner inte nödvändigtvis i sidvind – se **Sidvind (yaw)** nedan.
 
 **Fotografera inte om för varje position.** 1° ryggvinkel ≈ 0.0035 m² frontarea ≈ 0.0024 m²
 CdA – ungefär vad 10 mm padhöjd är värd. Posevariationen mellan två foton av "samma"
@@ -202,6 +202,67 @@ så det adderas i stället för att ta ut sig. Ta **ett** baselinefotopar och ä
 via `FIT`. Då är landmärken, kropp och tyg identiska och bara det du ville ändra skiljer.
 Fotot på den tunade positionen har en annan roll: kontrollera att du faktiskt intog den pose
 modellen förutsade.
+
+## Sidvind (yaw)
+Actions → **aero-yaw** → Run workflow. Kör båda positionerna vid varje vinkel och räknar om
+svepet till medeleffekt över ett varv.
+
+Ingen åker på en fast yaw-vinkel; vinkeln följer av åkfart och vind. Vid 40 km/h ger 5 km/h
+sidvind ca 7°, 10 km/h ca 14° och 15 km/h ca 21°. CdA kan skilja betydligt mer mellan 0 och
+15° än mellan två sittpositioner, så svepet svarar på en fråga som `aero-delta` inte kan:
+**håller positionsvinsten när det blåser?**
+
+### Yaw görs genom att vrida geometrin, inte inloppet
+Det ligger nära till hands att i stället vrida `Uinlet`. Gör inte det. Då far vaken snett ut
+ur domänen – 10 m nedströms vid 15° är 2.7 m i sidled, bredare än domänens halva bredd på
+2.5 m – och `sides` kan inte längre vara symmetriplan, eftersom flödet ska passera dem.
+Vrids kroppen i stället ligger vaken kvar längs domänens långa axel och randvillkoren står
+orörda. Vid 20° når maskinen y = ±0.41 m, väl inom `nearBox`.
+
+`build_model.py yaw_deg=<grader>` vrider hela maskinen om lodaxeln. Fyra saker måste följa
+med, och **var och en av dem är tyst om den inte gör det**:
+
+| vad | varför |
+|---|---|
+| `dragDir` | drag rapporteras längs **färdriktningen**, inte längs vinden |
+| `pitchAxis` | momentets referensram följer kroppen |
+| hjulaxel | hjulen snurrar fortfarande kring sin egen axel |
+| axelorigo | axlarna har flyttat sig |
+
+`tools/configure_case.sh` läser alla fyra ur `model_info.json` och sätter dem; vid yaw = 0 är
+de exakt de värden caset levereras med, så rakfram-körningarna påverkas inte.
+`tools/check_case.py` vaktar kopplingen. **`./Allrun` på egen hand gör inte rotationen** –
+den vägen går bara genom `configure_case.sh`.
+
+Att `dragDir` måste vridas är det subtila. Vid yaw skiljer färdriktningen och vindriktningen
+sig åt, och bara komponenten längs färdriktningen kostar watt – en ryttare i sidvind bär en
+stor sidokraft som inte uträttar något arbete. Ett kvarglömt `(1 0 0)` kraschar ingenting,
+det rapporterar bara vindaxelkraften och överdriver vad sidvinden kostar.
+
+### CdA_eff: svepet omräknat till watt
+`tools/yaw_report.py` väger ihop två effekter som drar åt motsatt håll – CdA växer med yaw,
+men skenbara vinden är svag i medvind och stark i motvind – till det stillaluft-CdA som hade
+kostat lika mycket över ett varv:
+
+    CdA_eff = medel_φ[ CdA(β) · v_air² ] / V²
+
+med vindriktningen φ likformig över varvet. Det är CdA_eff, inte CdA vid en enskild vinkel,
+som avgör om en position är bättre på en blåsig dag.
+
+### Kostnader att känna till
+- **Nätet är detsamma vid alla vinklar.** Svepet kör `configure_case.sh ... wide`, som
+  breddar förfiningsboxarna (nearBox y ±0.7 m, wakeBox y ±1.1 m) vid *varje* vinkel, noll
+  inräknad. Ett nät som ändrar sig med vinkeln lägger nätbrus rakt in i trenden. Följden är
+  att 0°-punkten i svepet inte är bitidentisk med `aero-delta`s baseline – svepet är
+  internt konsistent, vilket är det som behövs.
+- **Marken rör sig med luften, inte med cykeln.** En rullande väg kan inte vridas. Vid yaw
+  är det inte riktigt rätt, men alternativet – stillastående mark – ger ett falskt
+  gränsskikt över hela golvet och är sämre.
+- **Cyklisten är inte spegelsymmetrisk.** Ett ben är fram, kedjan sitter på höger sida. Äkta
+  +β och −β skiljer sig därför. Körs bara ena sidan speglar rapporten kurvan och säger till
+  om det.
+- En replik per punkt. Spridningen mellan körningar är 0.0010 m², så skillnader under
+  ca 0.0014 m² går inte att skilja från brus.
 
 ## Begränsningar
 - Kroppen är byggd av ellipsoider/konvexa skal – ger rätt volym/siluett, inte veck i löst tyg

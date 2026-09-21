@@ -52,10 +52,17 @@ FIT = dict(
     head_pitch_deg=0.0,     # tuck the head (-) / look up (+)
     crank_angle_deg=None,   # None = the crank position in the photo
 )
+# Yaw: the geometry is rotated about the vertical axis, NOT the inlet direction. Rotating
+# the flow instead would send the wake off at an angle and straight into the side boundary
+# (10 m downstream at 15 deg is 2.7 m lateral, wider than the domain half-width). With the
+# body rotated the wake stays aligned with the long axis of the domain and the symmetry
+# sides remain valid.
+YAW_DEG = 0.0
 ANKLE_OFFSET = (-70.0, 120.0, 95.0)    # ankle relative to the pedal spindle (x, |y|, z)
 KNEE_TARGET_DEG = 145.0                # knee at bottom dead centre; fit window is 140-150
 BODY_DENSITY = 1010.0                  # kg/m3
 
+_GLOBALS = {'YAW_DEG'}                 # scalars that live at module level, not in a dict
 for _a in sys.argv[1:]:                # e.g. `python build_model.py pad_drop_mm=-20`
     if '=' not in _a:
         sys.exit(f'argumentet {_a!r} saknar =; förväntar nyckel=värde')
@@ -63,10 +70,13 @@ for _a in sys.argv[1:]:                # e.g. `python build_model.py pad_drop_mm
     # En okänd nyckel MÅSTE avbryta. Skrevs den bara in i FIT skulle en stavfel-körning
     # tyst bygga baseline-geometrin och rapportera ett delta på noll som om det vore ett
     # resultat - exakt den sortens tyst fel som är omöjlig att upptäcka i efterhand.
+    if _k.upper() in _GLOBALS:         # yaw_deg and YAW_DEG both work
+        globals()[_k.upper()] = float(_v)
+        continue
     _target = RIDER if _k in RIDER else FIT if _k in FIT else None
     if _target is None:
         sys.exit(f'okänd parameter {_k!r}. Giltiga: '
-                 + ', '.join(sorted(list(RIDER) + list(FIT))))
+                 + ', '.join(sorted(list(RIDER) + list(FIT) + [g.lower() for g in _GLOBALS])))
     _target[_k] = None if _v == 'None' else float(_v)
 
 # ---------- primitive helpers (all watertight) ----------
@@ -257,7 +267,9 @@ r, kneeR, body = rider(pose, GIRTH)
 wR, wF = wheel(X_REAR), wheel(X_REAR + WB)
 SINK = 3.0   # tyre contact: sink 3 mm below z=0 so snappy gets a clean contact patch
 parts = {'rider': r, 'bike': b, 'wheel_rear': wR, 'wheel_front': wF}
-T = R(np.pi, [0, 0, 1])          # rider faces -X, flow along +X
+# 180 deg puts the rider facing -X with the flow along +X; YAW_DEG then turns the whole
+# machine about the vertical axis so the relative wind meets it at an angle.
+T = R(np.pi + np.radians(YAW_DEG), [0, 0, 1])
 GEOM.mkdir(exist_ok=True)
 for k, m in parts.items():
     m.apply_translation([0, 0, -SINK]); m.apply_transform(T); m.apply_scale(1e-3)
@@ -286,9 +298,25 @@ knee_resid = float(np.hypot(*(kneeR[[0, 2]] - L['knee_R'])))
 
 # Everything the OpenFOAM case has to stay in sync with, emitted so the workflow can
 # read it instead of duplicating the numbers (see "Nyckelkonventioner" in the README).
-axle_rear = [round(-X_REAR*1e-3, 6), 0.0, round((WHEEL_R - SINK)*1e-3, 6)]
-axle_front = [round(-(X_REAR + WB)*1e-3, 6), 0.0, round((WHEEL_R - SINK)*1e-3, 6)]
+_c, _s = np.cos(np.radians(YAW_DEG)), np.sin(np.radians(YAW_DEG))
+def _yaw(v):
+    """Turn an export-frame vector about the vertical axis by YAW_DEG."""
+    return [round(v[0]*_c - v[1]*_s, 6), round(v[0]*_s + v[1]*_c, 6), round(v[2], 6)]
+
+axle_rear = _yaw([-X_REAR*1e-3, 0.0, (WHEEL_R - SINK)*1e-3])
+axle_front = _yaw([-(X_REAR + WB)*1e-3, 0.0, (WHEEL_R - SINK)*1e-3])
+# The wheels still spin about their own axle, which the yaw rotation carried along with the
+# rest of the bike -- the machine turns, the flow does not.
+wheel_axis = _yaw([0.0, -1.0, 0.0])
+# Drag is reported along the DIRECTION OF TRAVEL, not along the wind. At yaw those differ,
+# and it is the travel-axis component that costs watts: a sailing rider feels a big side
+# force that does no work. Leaving dragDir at (1 0 0) would report the wind-axis force and
+# quietly overstate the cost of yaw.
+drag_dir = _yaw([1.0, 0.0, 0.0])
+pitch_axis = _yaw([0.0, 1.0, 0.0])
 info = dict(scale_mm_per_px=S, wheelbase_mm=WB, bb_height_mm=L['bb'][1],
+            yaw_deg=YAW_DEG, wheel_axis=wheel_axis,
+            drag_dir=drag_dir, lift_dir=[0.0, 0.0, 1.0], pitch_axis=pitch_axis,
             wheel_radius_m=WHEEL_R*1e-3, axle_rear_m=axle_rear, axle_front_m=axle_front,
             helmet_top_mm=L['helmet_top'][1], helmet_length_mm=L['helmet_front'][0]-L['helmet_tail'][0],
             frontal_area_m2=proj.area, bbox_m=full.bounds.tolist(),
@@ -306,6 +334,9 @@ print(f"RIDER  {RIDER['height_mm']/10:.0f} cm, {RIDER['mass_kg']:.0f} kg   "
       f"girth scale {GIRTH:.3f} -> {rider_vol*BODY_DENSITY:.1f} kg modellerad kropp")
 print(f"       höftledcentrum {HIP_DROP:.0f} mm under ytlandmärket (löst ur knävinkeln)")
 print(f"FIT    " + ', '.join(f'{k}={v}' for k, v in FIT.items() if v))
+if YAW_DEG:
+    print(f"YAW    {YAW_DEG:+.1f} deg: geometrin vriden, flödet kvar längs +x. "
+          f"dragDir {drag_dir} (färdriktningen, inte vindriktningen)")
 print(f"AREA   frontarea {proj.area:.4f} m2")
 print('\nFIT-VINKLAR')
 for k, v in fa.items():
