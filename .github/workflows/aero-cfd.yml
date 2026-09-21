@@ -109,7 +109,7 @@ jobs:
           {
             echo "### ${{ inputs.mesh }}, ${{ inputs.speed }} m/s, ${NP} kärnor"
             python3 tools/cda_summary.py 150
-          } >> $GITHUB_STEP_SUMMARY
+          } | tee -a $GITHUB_STEP_SUMMARY
 
       - uses: actions/upload-artifact@v4
         if: always()
