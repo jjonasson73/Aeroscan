@@ -23,9 +23,21 @@ import numpy as np
 
 
 def series(path, window):
+    """Medelvärde, svängningsamplitud och drift över medelvärdesfönstret.
+
+    std är inte ett mätfel utan hur mycket kraften rör sig INOM fönstret. Vid yaw är
+    avlösningen kraftigt asymmetrisk och simpleFoam landar inte alltid på ett stationärt
+    tillstånd - kraften fortsätter svänga. Medelvärdet över 150 iterationer blir då ett
+    stickprov ur svängningen, inte ett konvergerat värde, och två körningar av samma case
+    kan hamna långt ifrån varandra utan att något är fel på någondera.
+
+    drift jämför fönstrets första och andra halva. Är den stor i förhållande till std lutar
+    signalen fortfarande - körningen var inte klar, den var avbruten.
+    """
     d = np.loadtxt(path, comments='#', ndmin=2)
     c = d[-window:, 1]          # kolumn 1 = Cd; Aref = 1, alltså CdA i m²
-    return c.mean(), c.std(), int(d[-1, 0])
+    h = len(c)//2
+    return c.mean(), c.std(), float(c[h:].mean() - c[:h].mean()), int(d[-1, 0])
 
 
 def collect(root, window):
@@ -74,22 +86,49 @@ def main(root, window, V_kmh):
     positions = [p for p in ('base', 'tuned') if any(q == p for _, q in runs)]
 
     print(f'### CdA mot yaw (medel över sista {window} iterationerna)\n')
-    print('| yaw [°] | ' + ' | '.join(f'{p} CdA [m²]' for p in positions)
-          + (' | ΔCdA [m²] | Δ % |' if len(positions) == 2 else ' |'))
-    print('|---' * (1 + len(positions) + 2*(len(positions) == 2)) + '|')
+    print('| yaw [°] | ' + ' | '.join(f'{p} CdA ± svängning' for p in positions)
+          + (' | ΔCdA [m²] |' if len(positions) == 2 else ' |'))
+    print('|---' * (1 + len(positions) + (len(positions) == 2)) + '|')
+    unresolved, drifting = [], []
     for y in angles:
         cells = []
         for p in positions:
-            cells.append(f'{runs[(y, p)][0]:.4f}' if (y, p) in runs else '–')
+            if (y, p) in runs:
+                mu, sd, dr, _ = runs[(y, p)]
+                cells.append(f'{mu:.4f} ± {sd:.4f}')
+                if abs(dr) > sd:
+                    drifting.append(f'{p} vid {y:+.0f}°')
+            else:
+                cells.append('–')
         row = f'| {y:+.0f} | ' + ' | '.join(cells)
         if len(positions) == 2 and (y, 'base') in runs and (y, 'tuned') in runs:
-            b, t = runs[(y, 'base')][0], runs[(y, 'tuned')][0]
-            row += f' | {t-b:+.4f} | {(t-b)/b*100:+.2f} % |'
+            b, sb = runs[(y, 'base')][0], runs[(y, 'base')][1]
+            t, st = runs[(y, 'tuned')][0], runs[(y, 'tuned')][1]
+            # Svängningen i de två körningarna adderas i kvadratur. Det är en grov gräns:
+            # punkterna i fönstret är starkt autokorrelerade, så detta är snarare
+            # svängningens bredd än ett standardfel. Men är deltat mindre än så finns det
+            # ingenting att rapportera.
+            u = float(np.hypot(sb, st))
+            flag = ' ⚠' if abs(t - b) < u else ''
+            row += f' | {t-b:+.4f} ± {u:.4f}{flag} |'
+            if abs(t - b) < u:
+                unresolved.append(f'{y:+.0f}°')
         elif len(positions) == 2:
-            row += ' | – | – |'
+            row += ' | – |'
         else:
             row += ' |'
         print(row)
+
+    if unresolved or drifting:
+        print()
+        if unresolved:
+            print(f'> ⚠ **Deltat är mindre än svängningen vid {", ".join(unresolved)}.** '
+                  'Där finns ingen mätbar skillnad mellan positionerna – siffran i tabellen '
+                  'är ett stickprov ur svängningen, inte ett resultat.')
+        if drifting:
+            print(f'> ⚠ **Kraften lutar fortfarande i fönstret för {", ".join(drifting)}.** '
+                  'Körningen var inte konvergerad utan avbruten vid iterationsgränsen. '
+                  'Kör fler iterationer eller medelvärdesbilda över ett längre fönster.')
 
     print(f'\n### Vad det betyder vid {V_kmh:.0f} km/h\n')
     print('CdA_eff är det stillaluft-CdA som hade kostat lika många watt över ett varv, '
@@ -106,7 +145,7 @@ def main(root, window, V_kmh):
             ang, cda = curve(runs, p)
             if len(ang) < 2:
                 continue
-            vals[p], both, typ = effective(ang, cda, V_kmh, W)
+            vals[p], _both, typ = effective(ang, cda, V_kmh, W)
             if typ > ang.max() + 0.5:
                 warn_clamped = True
         if not vals:
@@ -134,9 +173,10 @@ def main(root, window, V_kmh):
         print(f'- ⚠ Vinden driver ut yaw förbi svepets yttersta punkt ({ang_b.max():+.0f}°). '
               'Där klampas CdA till ändvärdet i stället för att extrapoleras, vilket '
               '**underskattar** kostnaden av de starkaste vindarna.')
-    print('- Enskilda körningar bär samma slumpmässiga spridning som tidigare mätts till '
-          '0.0010 m² (0.5 %). En skillnad mellan två positioner som är mindre än ungefär '
-          '0.0014 m² går inte att skilja från brus på en enda replik per punkt.')
+    print('- Spridningen mellan separata körningar av identisk geometri mättes vid 0° till '
+          '0.0010 m² (0.5 %). Den gäller ett fall som konvergerar. Svänger kraften vid yaw '
+          'är spridningen mellan körningar större än så, och ± i tabellen ovan är då den '
+          'siffra att gå på – inte 0.0010.')
     print('- Marken rör sig med luften, inte med cykeln. Vid yaw är det inte riktigt rätt – '
           'en rullande väg kan inte vridas – men alternativet, stillastående mark, ger ett '
           'falskt gränsskikt över hela golvet och är sämre.')
