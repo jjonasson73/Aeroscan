@@ -11,16 +11,16 @@ on:
       fit:
         description: "FIT-ändringen, mellanslagsseparerad (t.ex. pad_drop_mm=-10 saddle_fore_mm=10)"
         default: "pad_drop_mm=-20"
-      mesh_a:
-        description: "Nätnivå A"
-        type: choice
-        options: [quick, coarse, medium, fine]
-        default: coarse
-      mesh_b:
-        description: "Nätnivå B (måste skilja sig från A)"
+      mesh:
+        description: "Nätnivå"
         type: choice
         options: [quick, coarse, medium, fine]
         default: medium
+      replicates:
+        description: "Repliker per position. Identiska case reproduceras inte exakt, så flera repliker ger ett felstapel i stället för en siffra utan osäkerhet."
+        type: choice
+        options: ['[1]', '[1,2]', '[1,2,3]']
+        default: '[1,2]' 
       max_iterations:
         default: "1500"
       speed:
@@ -34,9 +34,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mesh: ${{ fromJSON(format('["{0}","{1}"]', inputs.mesh_a, inputs.mesh_b)) }}
+        rep: ${{ fromJSON(inputs.replicates) }}
         pos: [base, tuned]
-    name: ${{ matrix.mesh }}-${{ matrix.pos }}
+    name: r${{ matrix.rep }}-${{ matrix.pos }}
     runs-on: ubuntu-24.04
     timeout-minutes: 355
     defaults:
@@ -72,7 +72,7 @@ jobs:
       - name: Configure case
         run: |
           set +eu; source "$OF_BASHRC"; set -e
-          bash tools/configure_case.sh "${{ matrix.mesh }}" "${{ inputs.speed }}" \
+          bash tools/configure_case.sh "${{ inputs.mesh }}" "${{ inputs.speed }}" \
                                        "${{ inputs.max_iterations }}" "$NP" fixed
 
       - name: Mesh and solve
@@ -95,7 +95,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ matrix.mesh }}-${{ matrix.pos }}
+          name: r${{ matrix.rep }}-${{ matrix.pos }}
           path: aero_case/out
           retention-days: 30
 
@@ -115,7 +115,7 @@ jobs:
           # tee: utslaget måste synas i jobbloggen också, inte bara i sammanfattningen -
           # sammanfattningen går inte att läsa via API:et.
           {
-            echo "## ${{ inputs.fit }} · ${{ inputs.mesh_a }} vs ${{ inputs.mesh_b }} · ${{ inputs.speed }} m/s"
+            echo "## ${{ inputs.fit }} · ${{ inputs.mesh }} · ${{ inputs.speed }} m/s · repliker ${{ inputs.replicates }}"
             echo
-            python3 tools/delta_report.py results 150
+            python3 tools/delta_report.py results 150 replik
           } | tee -a $GITHUB_STEP_SUMMARY
