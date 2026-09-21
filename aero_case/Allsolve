@@ -1,5 +1,5 @@
 #!/bin/sh
-cd "${0%/*}" || exit
+cd "$(dirname "$0")" || exit   # robust oavsett om skriptet körs som ./Allmesh, bash Allmesh eller med full sökväg
 . ${WM_PROJECT_DIR:?}/bin/tools/RunFunctions
 # fräscha 0-fält i varje processor (fungerar tack vare setConstraintTypes)
 for d in processor*; do rm -rf "$d/0" "$d"/[1-9]*; cp -r 0 "$d/0"; done

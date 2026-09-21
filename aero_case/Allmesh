@@ -1,5 +1,5 @@
 #!/bin/sh
-cd "${0%/*}" || exit
+cd "$(dirname "$0")" || exit   # robust oavsett om skriptet körs som ./Allmesh, bash Allmesh eller med full sökväg
 . ${WM_PROJECT_DIR:?}/bin/tools/RunFunctions
 mkdir -p constant/triSurface && cp -f geometry/rider.stl geometry/bike.stl geometry/wheel_*.stl constant/triSurface/
 runApplication surfaceFeatureExtract
