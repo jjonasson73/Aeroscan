@@ -274,18 +274,31 @@ byggde identiska STL:er och snappyHexMesh gjorde i praktiken samma nät. Replike
 alltså solvern och MPI-reduktionen, inte nätet — ett deterministiskt nätfel reproducerar sig
 perfekt. Därför kördes samma punkt om på en annan nätnivå.
 
-| nätnivå | ΔCdA vid 10° |
-|---|---|
-| coarse | +0.0058 ± 0.0006 |
-| medium | +0.0118, +0.0128 |
+| nätnivå | ΔCdA vid 10° | 0°-kontroll, base |
+|---|---|---|
+| coarse | +0.0058 ± 0.0006 | – (jobbet hängde) |
+| medium | +0.0118, +0.0128 | 0.1927, 0.1931 |
+| **fine** | **+0.0109 ± 0.0019** | 0.1940 ± 0.0012 |
 
-Tecknet håller, storleken gör det inte — en faktor två mellan nivåerna. **Det underkänns av
-projektets eget go/no-go-kriterium:** absolutvärdena får skilja sig, men deltat ska hålla
-inom 20 % mellan nätnivåer. Vid 0 grader klarade deltat det testet (se go/no-go ovan). Vid
-10 grader gör det inte det.
+**Medium och fine är överens; det är coarse som är för grovt.** Skillnaden medium–fine är
+7–15 % av deltat, alltså inom go/no-go-kriteriets 20 %. Coarse ligger en faktor två fel och
+duger inte vid yaw, trots att den fungerade vid 0 grader.
 
-Slutsatsen är alltså: **effekten är verklig, siffran är det inte.** Positionen är sämre
-runt 10 grader, men hur mycket är inte upplöst av de här näten.
+Slutsatsen är alltså: **ΔCdA vid 10 grader är ungefär +0.011 till +0.013 m² och
+nätkonvergerat.** Den tunade positionen är omkring 6 % sämre där. Kör inte yaw på `coarse`.
+
+0-graderskontrollen håller också: base landar på 0.1927, 0.1931 och 0.1940 mot den gamla
+baselinen 0.1930 ± 0.0010.
+
+En reservation: fine-körningens `tuned` vid 0 grader fick driftflaggan — kraften lutade
+fortfarande i medelvärdesfönstret, så körningen var avbruten vid iterationsgränsen snarare
+än konvergerad. Det är den svagaste av de fyra punkterna, och 0-gradersdeltat på fine
+(−0.0068 ± 0.0030) ska därför läsas med det i åtanke.
+
+**CdA_eff från fine-svepet går inte att jämföra med medium-svepets.** Fine kördes bara på
+två vinklar, så kurvan klampas vid 10 grader — allt över den vinkeln får 10-graderspunktens
+värde, där den tunade positionen är som sämst. Medium-svepets fyra vinklar, som fångar att
+positionen är bättre igen vid 15 grader, är rätt underlag för CdA_eff. Använd det.
 
 Vad det betyder praktiskt, från båda medium-körningarna:
 
