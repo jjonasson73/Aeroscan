@@ -341,6 +341,38 @@ antingen ändrar ryttarens position flödet ner över den, eller så har näten 
 just den vinkeln. Med en replik per punkt går det inte att avgöra vilket, och det är ett skäl
 att köra 8–12 grader innan man tror på hacken.
 
+### Vinkelförfining 8–12°: hacken är EN grad bred, alltså inte fysik
+
+| yaw | ΔCdA rider | ΔCdA bike | ΔCdA wheels |
+|---|---|---|---|
+| +8° | −0.0005 | +0.0028 | −0.0001 |
+| +9° | −0.0029 | +0.0022 | +0.0003 |
+| +10° | **+0.0096** | +0.0035 | +0.0011 |
+| +11° | −0.0044 | +0.0010 | +0.0002 |
+| +12° | – | – | – |
+
+Vid 8, 9 och 11 grader är den tunade positionen bättre, i linje med 5° (−0.0060) och 15°
+(−0.0046). Bara vid exakt 10 grader vänder tecknet. **En hack som är en grad bred är inte en
+aerodynamisk effekt** — verklig yaw-beroende interferens varierar slätt över flera grader.
+10-graderscaset är avvikande.
+
+**Varför nätstudien inte fångade det.** Coarse, medium och fine gav alla samma tecken vid 10
+grader, och det tolkades som att effekten var verklig. Men alla tre nivåerna byggde på
+*samma STL vid 10 grader*. Hela kedjan är deterministisk, så ett fel som uppstår före eller
+i samband med geometrin reproducerar sig perfekt på varje nätnivå. Att variera nätet testar
+bara det som ligger nedströms geometrin. Samma fälla som med replikerna: två körningar av
+identisk geometri testade solvern, inte nätet.
+
+Lärdomen är generell: **när pipelinen är deterministisk bevisar reproducerbarhet ingenting
+om felkällor uppströms.** För att testa geometrin måste man variera geometrin — här vinkeln.
+
+**Följd för slutsatsen.** CdA_eff-siffrorna som räknades fram tidigare byggde på en kurva som
+innehöll 10-graderspunkten. Tas den bort är ΔCdA negativ i hela det mätta intervallet, och
+påståendet att positionsvinsten försvinner i sidvind vilar då på en enda dålig punkt.
+
+Körningen gjordes på geometrin **före** commit 16414b1 (vadstaven och huvudproportionerna).
+Talen går inte att jämföra med något som körs efter den.
+
 <details><summary>Bakgrund: vad yaw gör med varje del i sig (ändring från 0°, negativt = vinst)</summary>
 
 | yaw | del | base | tuned |
