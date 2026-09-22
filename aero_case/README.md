@@ -316,6 +316,48 @@ medelvärdesfönstret, utan drift- eller oupplöst-flaggor. Kraften står stilla
 stationära. En tidig hypotes om att simpleFoam svänger vid yaw är därmed avfärdad — men den
 gav `yaw_report.py` sin svängnings- och driftdiagnostik, som numera visar det direkt.
 
+### Var sitter skillnaden? (uppdelning per kroppsdel, medium)
+
+Caset räknar CdA separat för ryttare, cykel och hjul. Vad yaw gör med varje del, som ändring
+från 0 grader — **negativt är en vinst**:
+
+| yaw | del | base | tuned |
+|---|---|---|---|
+| +5° | rider | −0.0067 | −0.0072 |
+| +5° | bike | +0.0015 | +0.0008 |
+| +5° | wheels | +0.0048 | +0.0045 |
+| +10° | rider | **−0.0191** | **−0.0064** |
+| +10° | bike | +0.0006 | +0.0030 |
+| +10° | wheels | +0.0080 | +0.0094 |
+| +15° | rider | −0.0224 | −0.0216 |
+| +15° | bike | +0.0039 | +0.0020 |
+| +15° | wheels | +0.0119 | +0.0123 |
+
+**Hjulen seglar inte.** De blir monotont sämre med yaw, +0.0048 → +0.0080 → +0.0119, och
+nästan exakt lika mycket i båda positionerna. Den seglingseffekt man får av riktiga djupa
+fälgar finns inte här: hjulen är modellerade som plana skivor med däck, inte som
+vingprofiler, så de bidrar bara med växande area och avlösning. Vill man studera
+seglingseffekten måste fälgprofilen modelleras.
+
+**Det är ryttaren som vinner på yaw.** Ryttarens motstånd faller kraftigt, −0.022 m² från
+0 till 15 grader. Hela CdA-minskningen vid yaw kommer därifrån, och den är stor nog att
+äta upp hjulens förlust.
+
+**10-gradersanomalin är att den tunade ryttaren missar sin vinst just där.** Base vinner
+−0.0191, tuned bara −0.0064. Gapet är 0.0127, vilket i praktiken är hela totaldeltat på
++0.0118 / +0.0128. Vid 15 grader vinner båda lika mycket igen (−0.0224 mot −0.0216), och
+därför vänder totaldeltat tillbaka till negativt där. Det är alltså inte en bred försämring
+utan en hack i kurvan vid en vinkel.
+
+Uppdelning av 10-gradersdeltat: ryttaren +0.0072, cykeln +0.0030, hjulen +0.0013. Summan
++0.0115 stämmer mot totalen. **Ryttaren bär 61 %, men cykeln bär 25 %** — värt att notera,
+eftersom ramen är identisk geometri i båda positionerna. Att den ändå skiljer 0.0030 betyder
+att ryttarens position ändrar flödet som matas ner över ramen. Det är fysiskt rimligt men
+ligger närmare brusnivån än ryttarsiffran, så läs det med måtta: en replik per punkt.
+
+Vid 0 grader är hela deltat ryttaren (−0.0054 mot totalt −0.0052 / −0.0059), vilket är väntat
+eftersom positionsändringen bara flyttar ryttaren.
+
 **Öppet.** Den nätnivå som hade avgjort storleken, `fine`, saknas ännu. En vinkelförfining
 runt 10 grader (8, 9, 10, 11, 12) skulle visa hur smal regimen är. Och bara plussidan av
 noll är körd; cyklisten är inte spegelsymmetrisk, så −10 grader kan se annorlunda ut.
