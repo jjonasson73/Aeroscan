@@ -69,37 +69,49 @@ def collect(root, window):
 
 
 def breakdown(angles, parts, positions):
-    """Var sitter skillnaden, och vad gör yaw med varje del för sig?"""
-    if not parts:
+    """Var sitter skillnaden mellan positionerna?
+
+    Leder med DELTAT per kroppsdel, inte med nivåerna. Svepet jämför två positioner, och
+    bara ryttaren skiljer sig mellan dem - cykel och hjul är identisk geometri. Deras
+    yaw-beteende är gemensam mod och hör inte hemma i svaret på vad positionen gör; att
+    leda med det gör en enkel jämförelse förvirrande.
+
+    Hjulraden har ändå ett jobb: den är kontrollen. Samma geometri ska ge samma motstånd
+    vinkel för vinkel. Skiljer den sig har näten eller körningarna drivit isär.
+    """
+    if not parts or len(positions) != 2:
         return
     print('\n### Var sitter skillnaden?\n')
-    print('CdA per kroppsdel. Summan är inte exakt totalen – delarna påverkar varandras '
-          'flöde – men uppdelningen visar vilken del som bär förändringen.\n')
-    print('| yaw [°] | del | ' + ' | '.join(positions)
-          + (' | Δ |' if len(positions) == 2 else ' |'))
-    print('|---' * (2 + len(positions) + (len(positions) == 2)) + '|')
+    print('ΔCdA per kroppsdel, tuned minus base. Bara ryttaren skiljer sig mellan '
+          'positionerna – cykel och hjul är identisk geometri, så deras rader ska ligga '
+          'nära noll och är kontrollen på att körningarna inte drivit isär.\n')
+    print('| yaw [°] | ' + ' | '.join(PARTS) + ' |')
+    print('|---' * (1 + len(PARTS)) + '|')
+    drift = []
     for y in angles:
+        cells = []
         for part in PARTS:
-            cells = [f'{parts[(y, p, part)]:.4f}' if (y, p, part) in parts else '–'
-                     for p in positions]
-            row = f'| {y:+.0f} | {part} | ' + ' | '.join(cells)
-            if len(positions) == 2 and all((y, p, part) in parts for p in positions):
-                d = parts[(y, 'tuned', part)] - parts[(y, 'base', part)]
-                row += f' | {d:+.4f} |'
-            elif len(positions) == 2:
-                row += ' | – |'
+            a, b = (y, 'base', part), (y, 'tuned', part)
+            if a in parts and b in parts:
+                d = parts[b] - parts[a]
+                cells.append(f'{d:+.4f}')
+                if part != 'rider' and abs(d) > 0.0025:
+                    drift.append(f'{part} vid {y:+.0f}° ({d:+.4f})')
             else:
-                row += ' |'
-            print(row)
+                cells.append('–')
+        print(f'| {y:+.0f} | ' + ' | '.join(cells) + ' |')
+    if drift:
+        print(f'\n> ⚠ **{", ".join(drift)}** skiljer sig trots identisk geometri. Antingen '
+              'ändrar ryttarens position flödet ner över cykeln, eller så har näten drivit '
+              'isär. Med en replik per punkt går det inte att avgöra vilket.')
 
-    # Det intressanta är inte nivån utan vad yaw GÖR med varje del: en vinstgivande del
-    # (skivhjul som seglar) syns som en negativ siffra här.
+    # Nivåerna och yaw-beteendet per del: bakgrund, inte svaret på positionsfrågan.
     base_ang = min(angles, key=abs)
     others = [y for y in angles if y != base_ang]
     if not others:
         return
-    print(f'\n**Vad yaw gör med varje del** (ändring från {base_ang:+.0f}°, '
-          'negativt = vinst):\n')
+    print(f'\n<details><summary>Bakgrund: vad yaw gör med varje del i sig '
+          f'(ändring från {base_ang:+.0f}°, negativt = vinst)</summary>\n')
     print('| yaw [°] | del | ' + ' | '.join(positions) + ' |')
     print('|---' * (2 + len(positions)) + '|')
     for y in others:
@@ -110,6 +122,8 @@ def breakdown(angles, parts, positions):
                 cells.append(f'{parts[b] - parts[a]:+.4f}'
                              if a in parts and b in parts else '–')
             print(f'| {y:+.0f} | {part} | ' + ' | '.join(cells) + ' |')
+    print('\nSumman av delarna är inte exakt totalen – delarna påverkar varandras flöde.')
+    print('\n</details>')
 
 
 def curve(runs, pos):
