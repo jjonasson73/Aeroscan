@@ -402,6 +402,65 @@ Vill man studera seglingseffekten måste fälgprofilen modelleras.
 runt 10 grader (8, 9, 10, 11, 12) skulle visa hur smal regimen är. Och bara plussidan av
 noll är körd; cyklisten är inte spegelsymmetrisk, så −10 grader kan se annorlunda ut.
 
+### Resultat 2026-09-22 på RÄTTAD geometri (commit 23f3ed4 och framåt)
+
+Rund hjälm 280 mm i stället för 324 mm TT-hjälm med svans, fixad vadstav, rättade
+huvudproportioner. **Inga äldre CdA-tal i det här dokumentet är jämförbara med de här.**
+
+| yaw | base CdA ± svängning | tuned CdA ± svängning | ΔCdA |
+|---|---|---|---|
+| +0° | 0.1956 ± 0.0018 | 0.1936 ± 0.0008 | −0.0019 ± 0.0020 ⚠ |
+| +5° | 0.1962 ± 0.0016 | 0.1918 ± 0.0012 | −0.0043 ± 0.0020 |
+| +10° | 0.1886 ± 0.0008 | 0.1915 ± 0.0012 | +0.0029 ± 0.0014 |
+| +15° | 0.1933 ± 0.0007 | 0.1815 ± 0.0016 | **−0.0118 ± 0.0018** |
+
+ΔCdA per kroppsdel:
+
+| yaw | rider | bike | wheels |
+|---|---|---|---|
+| +0° | −0.0026 | +0.0011 | −0.0004 |
+| +5° | −0.0062 | +0.0023 | −0.0005 |
+| +10° | **+0.0014** | +0.0016 | −0.0002 |
+| +15° | −0.0125 | +0.0014 | −0.0007 |
+
+**10-gradersavvikelsen krympte med en faktor fem.** Ryttardeltat gick från +0.0072 på den
+gamla geometrin (och +0.0096 i engradersvepet) till +0.0014. Totaldeltat är +0.0029 ± 0.0014,
+alltså knappt två gånger sin egen osäkerhet. Geometrifelen — vadstaven som stack ut 101 mm
+och TT-hjälmen som inte finns — stod för det mesta av den, men inte allt. Något litet finns
+kvar vid just den vinkeln.
+
+Kontrollen är också renare: cykeln ligger på +0.0011 till +0.0023 mot +0.0028 och +0.0035
+tidigare, och spikar inte längre vid 10 grader. Den är dock systematiskt positiv vid alla
+vinklar, vilket är rimligt — en lägre ryttare ändrar vad som matas ner över ramen — men det
+är en offset att hålla ögonen på.
+
+### Bilden har vänt: vinsten VÄXER med vinden
+
+| vind [km/h] | typisk yaw | base CdA_eff | tuned CdA_eff | ΔCdA_eff | Δ % |
+|---|---|---|---|---|---|
+| 0 | 0° | 0.1956 | 0.1936 | −0.0019 | −0.98 % |
+| 5 | 7° | 0.1980 | 0.1952 | −0.0028 | −1.40 % |
+| 10 | 14° | 0.2048 | 0.2009 | −0.0038 | −1.88 % |
+| 15 | 22° | 0.2203 | 0.2126 | −0.0077 | −3.50 % |
+| 20 | 30° | 0.2415 | 0.2319 | −0.0096 | **−3.97 %** |
+
+Det är motsatsen till vad den gamla geometrin gav, där vinsten försvann i sidvind. Nu är den
+**marginell i stilla luft och växer med vinden**. Mekanismen syns i uppdelningen: den tunade
+ryttaren vinner −0.0255 m² på att vridas till 15 grader mot baselines −0.0156. En lägre,
+flatare ryttare tjänar mer på yaw.
+
+### Vad som INTE är avgjort
+
+- **0-graderspunkten är under brusgolvet** och flaggad. Påståendet att positionen är snabbare
+  i stilla luft har alltså inget stöd i den här körningen.
+- **En replik per punkt.** Hela vändningen vilar på enskilda körningar, och 15-graderspunkten
+  som bär den största effekten är ett enda värde.
+- **Bara plussidan av noll.** Cyklisten är inte spegelsymmetrisk.
+- Svängningsamplituderna (±0.0007 till ±0.0018) är större än det brusgolv på 0.0010 som mättes
+  vid 0 grader på den gamla geometrin. Använd ± i tabellen, inte 0.0010.
+
+Nästa steg som faktiskt avgör något: **repliker**, inte fler vinklar.
+
 ### Kostnader att känna till
 - **Nätet är detsamma vid alla vinklar.** Svepet kör `configure_case.sh ... wide`, som
   breddar förfiningsboxarna (nearBox y ±0.7 m, wakeBox y ±1.1 m) vid *varje* vinkel, noll
