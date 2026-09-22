@@ -24,30 +24,46 @@ VER=$1
 # Därför väntar vi ut låset före varje försök i stället för att slå sönder det. Den
 # föräldralösa processen gör färdigt sitt jobb och släpper låset av sig själv; att ta bort
 # låsfilen under en körande apt är ett säkert sätt att få sönder paketdatabasen.
-wait_apt() {
-  local n=0
-  while sudo fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend \
-                   /var/lib/dpkg/lock >/dev/null 2>&1; do
+# Kör ett kommando i EGEN PROCESSGRUPP med tidsgräns, och döda hela gruppen om den slår.
+#
+# timeout(1) signalerar bara sitt direkta barn. add-debian-repo.sh körs som
+# `curl ... | sudo bash` och startar i sin tur apt-get; när tidsgränsen slog överlevde den
+# apt-get:en och höll /var/lib/apt/lists/lock.
+#
+# Första försöket att laga det var att VÄNTA ut låset. Det var fel strategi: den
+# föräldralösa apt-get:en satt fast på en stallad nedladdning och blev aldrig klar. Loggen
+# visar det rakt av - wait_apt upptäckte låset korrekt och gav upp efter fem minuter. En
+# process som är död i vattnet går inte att vänta ut, den måste dödas.
+#
+# ps i stället för kill -0 i väntesnurran: sudo kör apt som root, och kill -0 från
+# runner-användaren mot en root-process ger EPERM, vilket hade tolkats som "processen är
+# borta" och gjort snurran meningslös.
+run_group() {
+  local secs=$1; shift
+  setsid "$@" &
+  local pid=$! pgid n=0
+  pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')
+  [ -n "$pgid" ] || pgid=$pid
+  while ps -p "$pid" >/dev/null 2>&1; do
     n=$((n + 1))
-    if [ "$n" -gt 60 ]; then
-      echo "aptlåset släpptes inte på 5 minuter" >&2
-      return 1
+    if [ "$n" -ge "$secs" ]; then
+      echo "tidsgräns $secs s överskriden, dödar processgrupp $pgid" >&2
+      sudo kill -TERM "-$pgid" 2>/dev/null || true
+      sleep 5
+      sudo kill -KILL "-$pgid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      return 124
     fi
-    [ "$n" = 1 ] && echo "väntar på att aptlåset ska släppas..."
-    sleep 5
+    sleep 1
   done
-  return 0
+  wait "$pid"
 }
 
 retry() {
   local what=$1; shift
   local n
   for n in 1 2 3 4; do
-    wait_apt || return 1
-    # -k 15: SIGKILL om kommandot inte dör på SIGTERM inom 15 s.
-    # 600 s: apt-get update mot ett segt spegelarkiv tar legitimt flera minuter, och 300 s
-    # var för snålt - det var den gränsen som utlöste låskonflikten ovan.
-    if timeout -k 15 600 "$@"; then
+    if run_group 600 "$@"; then
       [ "$n" -gt 1 ] && echo "$what lyckades på försök $n"
       return 0
     fi
@@ -57,6 +73,12 @@ retry() {
   echo "$what gav upp efter 4 försök" >&2
   return 1
 }
+
+# Sprid ut starten. Åtta matrisjobb som alla hämtar från dl.openfoam.com i samma sekund är
+# vad som stallar repot till att börja med - felet har aldrig dykt upp i en ensam körning.
+STAGGER=$((RANDOM % 45))
+echo "väntar $STAGGER s för att inte stampa på repot samtidigt som syskonjobben"
+sleep "$STAGGER"
 
 retry "apt-get update" sudo apt-get update -qq
 retry "add-debian-repo" bash -c "curl -fsS --connect-timeout 20 --max-time 120 --retry 3 --retry-delay 5 https://dl.openfoam.com/add-debian-repo.sh | sudo bash"
