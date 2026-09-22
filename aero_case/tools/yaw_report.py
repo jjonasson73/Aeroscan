@@ -40,19 +40,76 @@ def series(path, window):
     return c.mean(), c.std(), float(c[h:].mean() - c[:h].mean()), int(d[-1, 0])
 
 
+PARTS = ('rider', 'bike', 'wheels')
+
+
 def collect(root, window):
-    runs = {}
+    """Totalen per (vinkel, position), och samma sak uppdelat per kroppsdel.
+
+    Caset räknar ut CdA separat för ryttare, cykel och hjul (fyra forceCoeffs i
+    controlDict). Utan uppdelningen säger rapporten att en position är sämre vid yaw men
+    inte VAD som är sämre, och det är skillnaden mellan en siffra och något att göra med.
+    """
+    runs, parts = {}, {}
     for f in sorted(glob.glob(str(pathlib.Path(root) / '*' / '**' / 'coefficient.dat'),
                               recursive=True)):
-        if 'CdA_total' not in f:
-            continue
         tag = next((p for p in pathlib.Path(f).parts
                     if p.startswith('y') and p.rsplit('-', 1)[-1] in ('base', 'tuned')), None)
         if tag is None:
             continue
         grp, pos = tag.rsplit('-', 1)
-        runs[(float(grp[1:]), pos)] = series(f, window)
-    return runs
+        yaw = float(grp[1:])
+        if 'CdA_total' in f:
+            runs[(yaw, pos)] = series(f, window)
+        else:
+            for part in PARTS:
+                if f'CdA_{part}' in f:
+                    parts[(yaw, pos, part)] = series(f, window)[0]
+    return runs, parts
+
+
+def breakdown(angles, parts, positions):
+    """Var sitter skillnaden, och vad gör yaw med varje del för sig?"""
+    if not parts:
+        return
+    print('\n### Var sitter skillnaden?\n')
+    print('CdA per kroppsdel. Summan är inte exakt totalen – delarna påverkar varandras '
+          'flöde – men uppdelningen visar vilken del som bär förändringen.\n')
+    print('| yaw [°] | del | ' + ' | '.join(positions)
+          + (' | Δ |' if len(positions) == 2 else ' |'))
+    print('|---' * (2 + len(positions) + (len(positions) == 2)) + '|')
+    for y in angles:
+        for part in PARTS:
+            cells = [f'{parts[(y, p, part)]:.4f}' if (y, p, part) in parts else '–'
+                     for p in positions]
+            row = f'| {y:+.0f} | {part} | ' + ' | '.join(cells)
+            if len(positions) == 2 and all((y, p, part) in parts for p in positions):
+                d = parts[(y, 'tuned', part)] - parts[(y, 'base', part)]
+                row += f' | {d:+.4f} |'
+            elif len(positions) == 2:
+                row += ' | – |'
+            else:
+                row += ' |'
+            print(row)
+
+    # Det intressanta är inte nivån utan vad yaw GÖR med varje del: en vinstgivande del
+    # (skivhjul som seglar) syns som en negativ siffra här.
+    base_ang = min(angles, key=abs)
+    others = [y for y in angles if y != base_ang]
+    if not others:
+        return
+    print(f'\n**Vad yaw gör med varje del** (ändring från {base_ang:+.0f}°, '
+          'negativt = vinst):\n')
+    print('| yaw [°] | del | ' + ' | '.join(positions) + ' |')
+    print('|---' * (2 + len(positions)) + '|')
+    for y in others:
+        for part in PARTS:
+            cells = []
+            for p in positions:
+                a, b = (base_ang, p, part), (y, p, part)
+                cells.append(f'{parts[b] - parts[a]:+.4f}'
+                             if a in parts and b in parts else '–')
+            print(f'| {y:+.0f} | {part} | ' + ' | '.join(cells) + ' |')
 
 
 def curve(runs, pos):
@@ -77,7 +134,7 @@ def effective(ang, cda, V_kmh, W_kmh, n=2000):
 
 
 def main(root, window, V_kmh):
-    runs = collect(root, window)
+    runs, parts = collect(root, window)
     if not runs:
         print('_Inga resultat hittades._')
         return 0
@@ -160,6 +217,8 @@ def main(root, window, V_kmh):
         else:
             row += ' |'
         print(row)
+
+    breakdown(angles, parts, positions)
 
     print('\n### Läsanvisning\n')
     print('- "typisk yaw" är 95:e percentilen av |yaw| över varvet, inte medelvärdet – '
