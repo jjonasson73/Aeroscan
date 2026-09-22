@@ -53,20 +53,39 @@ jobs:
         pos: [base, tuned]
     name: y${{ matrix.yaw }}-${{ matrix.pos }}
     runs-on: ubuntu-24.04
+    # OpenFOAM kommer färdigt i bilden i stället för att apt-installeras i varje jobb.
+    #
+    # Apt-steget fällde tre jobb: åtta matrisjobb hämtade från dl.openfoam.com samtidigt,
+    # repot stallade, och en föräldralös apt-get höll låset. Två experiment gick förlorade.
+    # Med en bild finns inget att hämta och hela felklassen är borta, inte lappad.
+    #
+    # Taggen är pinnad med flit. Tidigare installerades "senaste 2506-paketet" vid varje
+    # körning, så en patchrelease mellan två körningar hade bytt solver utan att synas i
+    # loggen. Vid de skillnader vi mäter -- deltan reproducerar på 0.0007 m² -- är tyst
+    # versionsdrift en verklig risk.
+    container:
+      image: opencfd/openfoam-default:${{ inputs.of_version }}
+      options: --user root
     timeout-minutes: 355
     defaults:
       run:
         shell: bash
         working-directory: aero_case
     steps:
+      # Före checkout finns aero_case inte, så arbetskatalogen måste överstyras här.
+      # Det här apt-anropet går mot Ubuntus egna arkiv, inte dl.openfoam.com -- det var
+      # OpenFOAM-repot som stallade, inte apt i sig.
+      - name: Container prerequisites
+        working-directory: .
+        timeout-minutes: 10
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends python3 python3-pip git ca-certificates
+
       - uses: actions/checkout@v4
 
-      - name: Install OpenFOAM
-        # timeout-minutes: utan den blockerar ett stallat apt i timmar i stället för att
-        # fela, och jobbet står kvar till workflow-timeouten på 355 minuter. Skriptet gör
-        # omförsök med backoff; tidsgränsen här fångar allt det inte täcker.
-        timeout-minutes: 20
-        run: bash tools/install_openfoam.sh "${{ inputs.of_version }}"
+      - name: Locate OpenFOAM
+        run: bash tools/find_openfoam.sh
 
       - name: Build geometry
         # FIT går via env, inte direkt ${{ }}-interpolation in i skriptkroppen. Oquoterad
@@ -75,7 +94,7 @@ jobs:
           FIT: ${{ inputs.fit }}
           YAW: ${{ matrix.yaw }}
         run: |
-          pip install --quiet -r requirements.txt
+          pip install --quiet --break-system-packages -r requirements.txt
           if [ "${{ matrix.pos }}" = "tuned" ]; then
             python3 build_model.py $FIT "yaw_deg=$YAW"
           else

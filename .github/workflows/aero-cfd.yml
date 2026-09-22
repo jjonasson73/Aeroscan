@@ -28,24 +28,35 @@ on:
 jobs:
   cfd:
     runs-on: ubuntu-24.04
+    # OpenFOAM kommer färdigt i bilden. Se aero-yaw.yml för bakgrunden: apt-steget fällde
+    # tre jobb, och en pinnad tagg skyddar dessutom mot att en patchrelease byter solver
+    # mellan två körningar utan att synas i loggen.
+    container:
+      image: opencfd/openfoam-default:${{ inputs.of_version }}
+      options: --user root
     timeout-minutes: 355
     defaults:
       run:
         shell: bash
         working-directory: aero_case
     steps:
+      # Före checkout finns aero_case inte, så arbetskatalogen måste överstyras här.
+      # Apt-anropet går mot Ubuntus egna arkiv, inte dl.openfoam.com.
+      - name: Container prerequisites
+        working-directory: .
+        timeout-minutes: 10
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends python3 python3-pip git ca-certificates
+
       - uses: actions/checkout@v4
 
-      - name: Install OpenFOAM
-        # timeout-minutes: utan den blockerar ett stallat apt i timmar i stället för att
-        # fela, och jobbet står kvar till workflow-timeouten på 355 minuter. Skriptet gör
-        # omförsök med backoff; tidsgränsen här fångar allt det inte täcker.
-        timeout-minutes: 20
-        run: bash tools/install_openfoam.sh "${{ inputs.of_version }}"
+      - name: Locate OpenFOAM
+        run: bash tools/find_openfoam.sh
 
       - name: Build geometry
         run: |
-          pip install --quiet -r requirements.txt
+          pip install --quiet --break-system-packages -r requirements.txt
           if [ -n "${{ inputs.fit_param }}" ]; then
             python3 build_model.py ${{ inputs.fit_param }}=${{ inputs.fit_delta }}
           else

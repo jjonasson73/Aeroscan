@@ -248,7 +248,19 @@ def rider(pose, g=1.0):
     head_c = np.array([nose[0] - 95, 0, 0.5*(head_top + chin[2])])
     head = ellipsoid(head_c, [100, 75, 0.5*(head_top - chin[2])])
     neck = limb(sh + [-40, 0, 20], head_c + [-40, 0, -20], 60*g, 55*g)
-    body = [torso, head, neck, ellipsoid(hands + [-15, 0, -5], [65, 55*g, 55*g])]
+    # Kappmuskeln. Utan den blir siluetten mellan hjälmens bakkant och axelkrönet en skarp
+    # V-skåra 342 mm djup och några centimeter bred -- halsen står som en ensam cylinder med
+    # tomrum på båda sidor. På en människa fyller trapezius det utrymmet, och en skarp konkav
+    # skåra i det mest utsatta området fångar en separationsbubbla som inte finns i verkligheten.
+    #
+    # Byggs som ett konvext skal mellan halsroten och de två axelkulorna, alltså lokalt. Att i
+    # stället utvidga bålens hull upp till halsroten hade gett en rak ramp över hela ryggen och
+    # ändrat kroppsvolymen.
+    neck_base = sh + np.array([-40.0, 0.0, 20.0])
+    trap = hull(ellipsoid(neck_base + [0, 0, 10], [75, 70*g, 55*g]),
+                ellipsoid(sh + [0, 120*g, -10], [70, 55*g, 55*g]),
+                ellipsoid(sh + [0, -120*g, -10], [70, 55*g, 55*g]))
+    body = [torso, head, neck, trap, ellipsoid(hands + [-15, 0, -5], [65, 55*g, 55*g])]
     kit = [helmet]
     for s_ in (1, -1):
         e = el + [0, s_*85, 0]
