@@ -249,6 +249,218 @@ kostat lika mycket över ett varv:
 med vindriktningen φ likformig över varvet. Det är CdA_eff, inte CdA vid en enskild vinkel,
 som avgör om en position är bättre på en blåsig dag.
 
+### Resultat 2026-09-21: tecknet håller, storleken gör det inte
+
+**Kortversionen: din tunade position är BÄTTRE rakt fram men SÄMRE runt 10 graders yaw,
+och vinsten är borta i sidvind. Hur mycket sämre vet vi inte.**
+
+Position: `pad_drop_mm=-10 saddle_fore_mm=10 saddle_up_mm=6` mot baseline, 12.5 m/s.
+
+Fyra vinklar på medium, två oberoende körningar:
+
+| yaw | ΔCdA körning 1 | ΔCdA körning 2 |
+|---|---|---|
+| +0° | −0.0052 | −0.0059 |
+| +5° | −0.0062 | −0.0081 |
+| +10° | **+0.0128** | **+0.0118** |
+| +15° | −0.0046 | −0.0072 |
+
+Vid 10 grader byter deltat tecken: den tunade positionen blir 6–7 % *sämre*. De två
+körningarna är överens om det på 0.0010 m², alltså inom brusgolvet. Det är inte en
+slumpmässig utreagare.
+
+**Vad repliken inte bevisade.** `build_model.py` är deterministisk, så båda körningarna
+byggde identiska STL:er och snappyHexMesh gjorde i praktiken samma nät. Repliken testade
+alltså solvern och MPI-reduktionen, inte nätet — ett deterministiskt nätfel reproducerar sig
+perfekt. Därför kördes samma punkt om på en annan nätnivå.
+
+| nätnivå | ΔCdA vid 10° | 0°-kontroll, base |
+|---|---|---|
+| coarse | +0.0058 ± 0.0006 | – (jobbet hängde) |
+| medium | +0.0118, +0.0128 | 0.1927, 0.1931 |
+| **fine** | **+0.0109 ± 0.0019** | 0.1940 ± 0.0012 |
+
+**Medium och fine är överens; det är coarse som är för grovt.** Skillnaden medium–fine är
+7–15 % av deltat, alltså inom go/no-go-kriteriets 20 %. Coarse ligger en faktor två fel och
+duger inte vid yaw, trots att den fungerade vid 0 grader.
+
+Slutsatsen är alltså: **ΔCdA vid 10 grader är ungefär +0.011 till +0.013 m² och
+nätkonvergerat.** Den tunade positionen är omkring 6 % sämre där. Kör inte yaw på `coarse`.
+
+0-graderskontrollen håller också: base landar på 0.1927, 0.1931 och 0.1940 mot den gamla
+baselinen 0.1930 ± 0.0010.
+
+En reservation: fine-körningens `tuned` vid 0 grader fick driftflaggan — kraften lutade
+fortfarande i medelvärdesfönstret, så körningen var avbruten vid iterationsgränsen snarare
+än konvergerad. Det är den svagaste av de fyra punkterna, och 0-gradersdeltat på fine
+(−0.0068 ± 0.0030) ska därför läsas med det i åtanke.
+
+**CdA_eff från fine-svepet går inte att jämföra med medium-svepets.** Fine kördes bara på
+två vinklar, så kurvan klampas vid 10 grader — allt över den vinkeln får 10-graderspunktens
+värde, där den tunade positionen är som sämst. Medium-svepets fyra vinklar, som fångar att
+positionen är bättre igen vid 15 grader, är rätt underlag för CdA_eff. Använd det.
+
+Vad det betyder praktiskt, från båda medium-körningarna:
+
+| | ΔCdA_eff vid 10 km/h vind (≈14° typisk yaw) |
+|---|---|
+| körning 1 | +0.45 % |
+| körning 2 | −0.42 % |
+
+Alltså **noll**. De −2.4 % som mättes i stilla luft överlever inte vinden. Det svaret är
+robust även om 10-graderspunktens storlek skulle visa sig vara ett nätartefakt, för då är
+hela kurvan osäker åt andra hållet.
+
+**Det är inte konvergensbrus.** Coarse-körningen ger ± 0.0002 och ± 0.0005 inom
+medelvärdesfönstret, utan drift- eller oupplöst-flaggor. Kraften står stilla; lösningarna är
+stationära. En tidig hypotes om att simpleFoam svänger vid yaw är därmed avfärdad — men den
+gav `yaw_report.py` sin svängnings- och driftdiagnostik, som numera visar det direkt.
+
+### Var sitter skillnaden? (uppdelning per kroppsdel, medium)
+
+Svepet jämför två positioner, och **bara ryttaren skiljer sig mellan dem**. ΔCdA per
+kroppsdel, tuned minus base:
+
+| yaw | rider | bike | wheels |
+|---|---|---|---|
+| +0° | −0.0054 | +0.0006 | −0.0001 |
+| +5° | −0.0060 | −0.0002 | −0.0003 |
+| +10° | **+0.0072** | +0.0030 | +0.0013 |
+| +15° | −0.0046 | −0.0013 | +0.0004 |
+
+**Ryttaren bär alltihop.** Hjulen ligger mellan −0.0001 och +0.0013 i alla fyra vinklar,
+alltså noll, vilket de ska göra eftersom det är identisk geometri. Hjulraden är därför inte
+ett resultat utan **kontrollen**: samma geometri ska ge samma motstånd vinkel för vinkel, och
+gör den inte det har näten eller körningarna drivit isär.
+
+Positionen är −0.005 till −0.006 bättre vid 0 och 5 grader, tappar +0.007 vid 10, och är
+tillbaka på −0.005 vid 15. En hack i kurvan vid en vinkel, inte en bred försämring.
+
+Cykeln vid 10 grader (+0.0030) är det enda som sticker ut i kontrollen. Ramen är identisk, så
+antingen ändrar ryttarens position flödet ner över den, eller så har näten drivit isär vid
+just den vinkeln. Med en replik per punkt går det inte att avgöra vilket, och det är ett skäl
+att köra 8–12 grader innan man tror på hacken.
+
+### Vinkelförfining 8–12°: hacken är EN grad bred, alltså inte fysik
+
+| yaw | ΔCdA rider | ΔCdA bike | ΔCdA wheels |
+|---|---|---|---|
+| +8° | −0.0005 | +0.0028 | −0.0001 |
+| +9° | −0.0029 | +0.0022 | +0.0003 |
+| +10° | **+0.0096** | +0.0035 | +0.0011 |
+| +11° | −0.0044 | +0.0010 | +0.0002 |
+| +12° | – | – | – |
+
+Vid 8, 9 och 11 grader är den tunade positionen bättre, i linje med 5° (−0.0060) och 15°
+(−0.0046). Bara vid exakt 10 grader vänder tecknet. **En hack som är en grad bred är inte en
+aerodynamisk effekt** — verklig yaw-beroende interferens varierar slätt över flera grader.
+10-graderscaset är avvikande.
+
+**Varför nätstudien inte fångade det.** Coarse, medium och fine gav alla samma tecken vid 10
+grader, och det tolkades som att effekten var verklig. Men alla tre nivåerna byggde på
+*samma STL vid 10 grader*. Hela kedjan är deterministisk, så ett fel som uppstår före eller
+i samband med geometrin reproducerar sig perfekt på varje nätnivå. Att variera nätet testar
+bara det som ligger nedströms geometrin. Samma fälla som med replikerna: två körningar av
+identisk geometri testade solvern, inte nätet.
+
+Lärdomen är generell: **när pipelinen är deterministisk bevisar reproducerbarhet ingenting
+om felkällor uppströms.** För att testa geometrin måste man variera geometrin — här vinkeln.
+
+**Följd för slutsatsen.** CdA_eff-siffrorna som räknades fram tidigare byggde på en kurva som
+innehöll 10-graderspunkten. Tas den bort är ΔCdA negativ i hela det mätta intervallet, och
+påståendet att positionsvinsten försvinner i sidvind vilar då på en enda dålig punkt.
+
+Körningen gjordes på geometrin **före** commit 16414b1 (vadstaven och huvudproportionerna).
+Talen går inte att jämföra med något som körs efter den.
+
+<details><summary>Bakgrund: vad yaw gör med varje del i sig (ändring från 0°, negativt = vinst)</summary>
+
+| yaw | del | base | tuned |
+|---|---|---|---|
+| +5° | rider | −0.0067 | −0.0072 |
+| +5° | bike | +0.0015 | +0.0008 |
+| +5° | wheels | +0.0048 | +0.0045 |
+| +10° | rider | −0.0191 | −0.0064 |
+| +10° | bike | +0.0006 | +0.0030 |
+| +10° | wheels | +0.0080 | +0.0094 |
+| +15° | rider | −0.0224 | −0.0216 |
+| +15° | bike | +0.0039 | +0.0020 |
+| +15° | wheels | +0.0119 | +0.0123 |
+
+Det här är gemensam mod och svarar inte på vad positionen gör, men det förklarar varför
+totalen sjunker med yaw: ryttarens motstånd faller −0.022 m² från 0 till 15 grader och äter
+upp hjulens förlust.
+
+**Hjulen seglar inte.** De blir monotont sämre med yaw, +0.0048 → +0.0080 → +0.0119. Den
+seglingseffekt riktiga djupa fälgar ger finns inte här: hjulen är modellerade som plana
+skivor med däck, inte som vingprofiler, så de bidrar bara med växande area och avlösning.
+Vill man studera seglingseffekten måste fälgprofilen modelleras.
+
+</details>
+
+**Öppet.** Den nätnivå som hade avgjort storleken, `fine`, saknas ännu. En vinkelförfining
+runt 10 grader (8, 9, 10, 11, 12) skulle visa hur smal regimen är. Och bara plussidan av
+noll är körd; cyklisten är inte spegelsymmetrisk, så −10 grader kan se annorlunda ut.
+
+### Resultat 2026-09-22 på RÄTTAD geometri (commit 23f3ed4 och framåt)
+
+Rund hjälm 280 mm i stället för 324 mm TT-hjälm med svans, fixad vadstav, rättade
+huvudproportioner. **Inga äldre CdA-tal i det här dokumentet är jämförbara med de här.**
+
+| yaw | base CdA ± svängning | tuned CdA ± svängning | ΔCdA |
+|---|---|---|---|
+| +0° | 0.1956 ± 0.0018 | 0.1936 ± 0.0008 | −0.0019 ± 0.0020 ⚠ |
+| +5° | 0.1962 ± 0.0016 | 0.1918 ± 0.0012 | −0.0043 ± 0.0020 |
+| +10° | 0.1886 ± 0.0008 | 0.1915 ± 0.0012 | +0.0029 ± 0.0014 |
+| +15° | 0.1933 ± 0.0007 | 0.1815 ± 0.0016 | **−0.0118 ± 0.0018** |
+
+ΔCdA per kroppsdel:
+
+| yaw | rider | bike | wheels |
+|---|---|---|---|
+| +0° | −0.0026 | +0.0011 | −0.0004 |
+| +5° | −0.0062 | +0.0023 | −0.0005 |
+| +10° | **+0.0014** | +0.0016 | −0.0002 |
+| +15° | −0.0125 | +0.0014 | −0.0007 |
+
+**10-gradersavvikelsen krympte med en faktor fem.** Ryttardeltat gick från +0.0072 på den
+gamla geometrin (och +0.0096 i engradersvepet) till +0.0014. Totaldeltat är +0.0029 ± 0.0014,
+alltså knappt två gånger sin egen osäkerhet. Geometrifelen — vadstaven som stack ut 101 mm
+och TT-hjälmen som inte finns — stod för det mesta av den, men inte allt. Något litet finns
+kvar vid just den vinkeln.
+
+Kontrollen är också renare: cykeln ligger på +0.0011 till +0.0023 mot +0.0028 och +0.0035
+tidigare, och spikar inte längre vid 10 grader. Den är dock systematiskt positiv vid alla
+vinklar, vilket är rimligt — en lägre ryttare ändrar vad som matas ner över ramen — men det
+är en offset att hålla ögonen på.
+
+### Bilden har vänt: vinsten VÄXER med vinden
+
+| vind [km/h] | typisk yaw | base CdA_eff | tuned CdA_eff | ΔCdA_eff | Δ % |
+|---|---|---|---|---|---|
+| 0 | 0° | 0.1956 | 0.1936 | −0.0019 | −0.98 % |
+| 5 | 7° | 0.1980 | 0.1952 | −0.0028 | −1.40 % |
+| 10 | 14° | 0.2048 | 0.2009 | −0.0038 | −1.88 % |
+| 15 | 22° | 0.2203 | 0.2126 | −0.0077 | −3.50 % |
+| 20 | 30° | 0.2415 | 0.2319 | −0.0096 | **−3.97 %** |
+
+Det är motsatsen till vad den gamla geometrin gav, där vinsten försvann i sidvind. Nu är den
+**marginell i stilla luft och växer med vinden**. Mekanismen syns i uppdelningen: den tunade
+ryttaren vinner −0.0255 m² på att vridas till 15 grader mot baselines −0.0156. En lägre,
+flatare ryttare tjänar mer på yaw.
+
+### Vad som INTE är avgjort
+
+- **0-graderspunkten är under brusgolvet** och flaggad. Påståendet att positionen är snabbare
+  i stilla luft har alltså inget stöd i den här körningen.
+- **En replik per punkt.** Hela vändningen vilar på enskilda körningar, och 15-graderspunkten
+  som bär den största effekten är ett enda värde.
+- **Bara plussidan av noll.** Cyklisten är inte spegelsymmetrisk.
+- Svängningsamplituderna (±0.0007 till ±0.0018) är större än det brusgolv på 0.0010 som mättes
+  vid 0 grader på den gamla geometrin. Använd ± i tabellen, inte 0.0010.
+
+Nästa steg som faktiskt avgör något: **repliker**, inte fler vinklar.
+
 ### Kostnader att känna till
 - **Nätet är detsamma vid alla vinklar.** Svepet kör `configure_case.sh ... wide`, som
   breddar förfiningsboxarna (nearBox y ±0.7 m, wakeBox y ±1.1 m) vid *varje* vinkel, noll

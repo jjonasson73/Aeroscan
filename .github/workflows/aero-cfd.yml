@@ -37,12 +37,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install OpenFOAM
-        working-directory: .
-        run: |
-          curl -s https://dl.openfoam.com/add-debian-repo.sh | sudo bash
-          sudo apt-get install -y --no-install-recommends openfoam${{ inputs.of_version }}-default
-          echo "OF_BASHRC=/usr/lib/openfoam/openfoam${{ inputs.of_version }}/etc/bashrc" >> $GITHUB_ENV
-          echo "NP=$(nproc)" >> $GITHUB_ENV
+        # timeout-minutes: utan den blockerar ett stallat apt i timmar i stället för att
+        # fela, och jobbet står kvar till workflow-timeouten på 355 minuter. Skriptet gör
+        # omförsök med backoff; tidsgränsen här fångar allt det inte täcker.
+        timeout-minutes: 20
+        run: bash tools/install_openfoam.sh "${{ inputs.of_version }}"
 
       - name: Build geometry
         run: |

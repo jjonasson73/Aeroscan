@@ -58,6 +58,19 @@ FIT = dict(
 # body rotated the wake stays aligned with the long axis of the domain and the symmetry
 # sides remain valid.
 YAW_DEG = 0.0
+
+# Hjälmen. Fotot visar en kort rund hjälm, men landmärkena helmet_front/helmet_tail gav 324
+# mm hjälmlängd, vilket är en TT-hjälm med svans. Skillnaden är inte kosmetisk: en svans är
+# en roderyta och ändrar beteendet vid yaw helt.
+#
+# helmet_tail är det minst pålitliga landmärket -- bakre hjälmkanten går ihop med nacken i
+# siluetten och är lätt att sätta för långt bak. Därför tas LÄNGDEN härifrån i stället, medan
+# hjälmens överkant fortfarande ankras i helmet_top och framkanten i helmet_front, som båda
+# är tydliga i bilden.
+#
+#   style='round'  kort rund hjälm (väg/aero-väg), längden från length_mm
+#   style='tt'     längden ur landmärkena, som tidigare
+HELMET = dict(style='round', length_mm=280.0, width_mm=190.0, height_mm=165.0)
 ANKLE_OFFSET = (-70.0, 120.0, 95.0)    # ankle relative to the pedal spindle (x, |y|, z)
 KNEE_TARGET_DEG = 145.0                # knee at bottom dead centre; fit window is 140-150
 BODY_DENSITY = 1010.0                  # kg/m3
@@ -212,13 +225,28 @@ def rider(pose, g=1.0):
                  ellipsoid(sh + [0, -130*g, 0], [60, 55*g, 60*g]))
     # head & helmet (helmet: 190 mm wide, length from photo; helmet is kit, not body mass)
     ht, hf, htail = pose.helmet_top, pose.helmet_front, pose.helmet_tail
-    h_len = np.linalg.norm((hf - htail)[[0, 2]])
-    hel_c = np.array([0.5*(hf[0] + htail[0]) + 5, 0, ht[2] - 100])
-    hel_tilt = np.degrees(np.arctan2(*(hf - htail)[[2, 0]]))
-    helmet = ellipsoid(hel_c, [h_len/2, 95, 100], rot=R(np.radians(-12 + hel_tilt), [0, 1, 0]))
+    if HELMET['style'] == 'round':
+        h_len, h_wid, h_hgt = HELMET['length_mm'], HELMET['width_mm'], HELMET['height_mm']
+        # Framkanten vid pannan, överkanten vid helmet_top. Ingen svansdroppning.
+        hel_c = np.array([hf[0] - h_len/2, 0, ht[2] - h_hgt/2])
+        hel_tilt = np.degrees(np.arctan2(*(ht - hf)[[2, 0]])) + 90
+    else:
+        h_len, h_wid, h_hgt = np.linalg.norm((hf - htail)[[0, 2]]), 190.0, 200.0
+        hel_c = np.array([0.5*(hf[0] + htail[0]) + 5, 0, ht[2] - 100])
+        hel_tilt = np.degrees(np.arctan2(*(hf - htail)[[2, 0]])) - 12
+    helmet = ellipsoid(hel_c, [h_len/2, h_wid/2, h_hgt/2], rot=R(np.radians(hel_tilt), [0, 1, 0]))
     chin, nose = pose.chin, pose.nose
-    head_c = np.array([nose[0] - 95, 0, 0.5*(hel_c[2] + chin[2]) - 5])
-    head = ellipsoid(head_c, [100, 72*g, (hel_c[2] + 60 - chin[2])/2])
+    # Huvudet slutar vid hakan. Tidigare sattes höjden till (hel_c+60-chin)/2 kring en
+    # mittpunkt som lade underkanten 34 mm NEDANFÖR haklandmärket -- en blaffa under
+    # hjälmen som inte finns på någon människa.
+    # Bredden skalas inte längre med kroppsomfånget: ett huvud växer inte med midjemåttet,
+    # och 72*g gav 131 mm huvudbredd mot ca 150 mm för en vuxen. Det gjorde steget ner mot
+    # hjälmens 190 mm onödigt stort.
+    # Hjässan sitter strax under hjälmens överkant: skal plus stoppning, ca 35 mm.
+    # Det är oberoende av hjälmens höjd och ska inte kopplas till den.
+    head_top = ht[2] - 35
+    head_c = np.array([nose[0] - 95, 0, 0.5*(head_top + chin[2])])
+    head = ellipsoid(head_c, [100, 75, 0.5*(head_top - chin[2])])
     neck = limb(sh + [-40, 0, 20], head_c + [-40, 0, -20], 60*g, 55*g)
     body = [torso, head, neck, ellipsoid(hands + [-15, 0, -5], [65, 55*g, 55*g])]
     kit = [helmet]
@@ -229,8 +257,20 @@ def rider(pose, g=1.0):
     # legs: feet on the pedals, knee from 2-link IK on the stature-derived segments
     for ped, s_ in ((pose.pedal_R, -1), (pose.pedal_L, 1)):
         hj, kn, ank = pose.leg(ped, s_, ANKLE_OFFSET)
+        # Vadmuskeln läggs BAKOM underbenet, uttryckt i benets egen riktning. Tidigare
+        # användes fasta offset i världskoordinater (kn+[-35,0,-60] -> ank+[-20,0,120]),
+        # vilket bara hade fungerat om underbenet stod lodrätt. Det gör det inte, och på
+        # vänsterbenet -- där veven står uppe och underbenet lutar kraftigt -- hamnade
+        # nedre änden 106 mm vid sidan av benets axel. Resultatet var en stav som stack ut
+        # 101 mm bakom vaden i stället för en muskelbuk.
+        u = (ank - kn) / np.linalg.norm(ank - kn)
+        back = np.array([-u[2], 0.0, u[0]])              # vinkelrätt mot benet i sagittalplanet
+        if back[0] > 0:
+            back = -back                                 # ryttaren tittar mot +x, vaden sitter bakåt
+        shank = np.linalg.norm(ank - kn)
         body += [limb(hj, kn, 88*g, 58*g), limb(kn, ank, 58*g, 36*g),
-                 limb(kn + [-35, 0, -60], ank + [-20, 0, 120], 48*g, 34*g)]    # calf
+                 limb(kn + u*0.15*shank + back*26, kn + u*0.60*shank + back*16,
+                      46*g, 34*g)]                                             # calf
         kit.append(ellipsoid(ped + [15, s_*120, 38], [140, 52, 48]))           # shoe
         if s_ == -1:
             kneeR = kn
@@ -318,7 +358,10 @@ info = dict(scale_mm_per_px=S, wheelbase_mm=WB, bb_height_mm=L['bb'][1],
             yaw_deg=YAW_DEG, wheel_axis=wheel_axis,
             drag_dir=drag_dir, lift_dir=[0.0, 0.0, 1.0], pitch_axis=pitch_axis,
             wheel_radius_m=WHEEL_R*1e-3, axle_rear_m=axle_rear, axle_front_m=axle_front,
-            helmet_top_mm=L['helmet_top'][1], helmet_length_mm=L['helmet_front'][0]-L['helmet_tail'][0],
+            helmet_top_mm=L['helmet_top'][1], helmet_style=HELMET['style'],
+            helmet_length_mm=(HELMET['length_mm'] if HELMET['style'] == 'round'
+                              else L['helmet_front'][0]-L['helmet_tail'][0]),
+            helmet_landmark_length_mm=L['helmet_front'][0]-L['helmet_tail'][0],
             frontal_area_m2=proj.area, bbox_m=full.bounds.tolist(),
             rider=dict(RIDER), fit=dict(FIT), girth_scale=round(GIRTH, 4),
             hip_drop_mm=HIP_DROP,
