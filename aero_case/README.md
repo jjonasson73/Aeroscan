@@ -449,6 +449,44 @@ Det är motsatsen till vad den gamla geometrin gav, där vinsten försvann i sid
 ryttaren vinner −0.0255 m² på att vridas till 15 grader mot baselines −0.0156. En lägre,
 flatare ryttare tjänar mer på yaw.
 
+### Replik: resultatet håller
+
+Två oberoende körningar av identisk geometri (run 35717653137 och 35739559095). Det ger
+spridningen mellan körningar på den rättade geometrin — siffran som tidigare lånats från den
+gamla modellen.
+
+| yaw | ΔCdA körning 1 | ΔCdA körning 2 | skillnad |
+|---|---|---|---|
+| +5° | −0.0043 | −0.0050 | 0.0007 |
+| +10° | +0.0029 | +0.0029 | **0.0000** |
+| +15° | −0.0118 | −0.0115 | 0.0003 |
+
+**Spridningen mellan körningar är 0.0000–0.0007 m²**, alltså tätare än de 0.0010 vi lånat
+från den gamla geometrin. Absoluta CdA reproducerar på 0.0002–0.0009.
+
+Konsekvenser:
+
+- **15-graderspunkten håller.** −0.0118 och −0.0115, skillnad 0.0003 mot en effekt på 0.0115.
+  Effekten är trettio gånger spridningen. Vändningen — att positionsvinsten växer med vinden
+  — är reell på den här geometrin.
+- **10-gradersblippen är också reell**, om än liten: +0.0029 båda gångerna, exakt. Den är
+  inte brus, den är en egenskap hos geometrin. Men den är bara två gånger sin egen
+  svängningsosäkerhet (±0.0014), så storleken är svagt bestämd.
+- **Kontrollen är utmärkt.** Hjulen ligger på −0.0002 till −0.0011 i båda körningarna, alltså
+  noll. Cykeln rör sig mest vid 15 grader (+0.0014 mot −0.0002), vilket är den största
+  kontrollavvikelsen och värd att hålla ögonen på.
+
+CdA_eff vid höga vindar reproducerar nästan exakt: −3.50 % mot −3.54 % vid 15 km/h, och
+−3.97 % mot −3.98 % vid 20 km/h.
+
+**0-graderspunkten saknas i replikeringen.** `y0-base` föll på aptstallet i den andra
+körningen, så låg vind går inte att jämföra mellan körningarna. Det är just den punkt som var
+flaggad som under brusgolvet, alltså den vi mest ville se replikerad.
+
+Båda körningarna gjordes på geometrin **före** kappmuskeln (commit 7df9390). Siluetthålet
+mellan hjälmens bakkant och axeln var 342 mm i dessa körningar och är nu 86 mm, så nästa
+körning ger andra tal.
+
 ### Vad som INTE är avgjort
 
 - **0-graderspunkten är under brusgolvet** och flaggad. Påståendet att positionen är snabbare
