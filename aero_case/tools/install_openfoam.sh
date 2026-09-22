@@ -16,11 +16,38 @@
 set -euo pipefail
 VER=$1
 
+# timeout dödar bara sitt DIREKTA barn. add-debian-repo.sh körs som `curl ... | sudo bash`
+# och startar i sin tur apt-get; slår tidsgränsen blir den apt-get:en föräldralös och
+# fortsätter hålla /var/lib/apt/lists/lock. Nästa försök får då "Could not get lock" och
+# alla omförsök faller på rad - en hängning blir en låskonflikt i stället.
+#
+# Därför väntar vi ut låset före varje försök i stället för att slå sönder det. Den
+# föräldralösa processen gör färdigt sitt jobb och släpper låset av sig själv; att ta bort
+# låsfilen under en körande apt är ett säkert sätt att få sönder paketdatabasen.
+wait_apt() {
+  local n=0
+  while sudo fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend \
+                   /var/lib/dpkg/lock >/dev/null 2>&1; do
+    n=$((n + 1))
+    if [ "$n" -gt 60 ]; then
+      echo "aptlåset släpptes inte på 5 minuter" >&2
+      return 1
+    fi
+    [ "$n" = 1 ] && echo "väntar på att aptlåset ska släppas..."
+    sleep 5
+  done
+  return 0
+}
+
 retry() {
   local what=$1; shift
   local n
   for n in 1 2 3 4; do
-    if timeout 300 "$@"; then
+    wait_apt || return 1
+    # -k 15: SIGKILL om kommandot inte dör på SIGTERM inom 15 s.
+    # 600 s: apt-get update mot ett segt spegelarkiv tar legitimt flera minuter, och 300 s
+    # var för snålt - det var den gränsen som utlöste låskonflikten ovan.
+    if timeout -k 15 600 "$@"; then
       [ "$n" -gt 1 ] && echo "$what lyckades på försök $n"
       return 0
     fi
