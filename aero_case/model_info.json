@@ -35,8 +35,10 @@
   0.333
  ],
  "helmet_top_mm": 1369.2831988573298,
- "helmet_length_mm": 315.6367383231826,
- "frontal_area_m2": 0.34713493012630525,
+ "helmet_style": "round",
+ "helmet_length_mm": 280.0,
+ "helmet_landmark_length_mm": 315.6367383231826,
+ "frontal_area_m2": 0.35119437226990596,
  "bbox_m": [
   [
    -0.9175111651420593,
@@ -46,7 +48,7 @@
   [
    0.7360000014305115,
    0.2070000022649765,
-   1.3794409036636353
+   1.4030368328094482
   ]
  ],
  "rider": {
@@ -61,10 +63,10 @@
   "head_pitch_deg": 0.0,
   "crank_angle_deg": null
  },
- "girth_scale": 0.9113,
+ "girth_scale": 0.9106,
  "hip_drop_mm": 37.9,
- "rider_volume_m3": 0.06839702427024097,
- "rider_implied_mass_kg": 69.08099451294338,
+ "rider_volume_m3": 0.0683987222437928,
+ "rider_implied_mass_kg": 69.08270946623072,
  "fit_angles": {
   "back_deg": 15.7,
   "torso_deg": 25.7,
@@ -100,7 +102,7 @@
  ],
  "knee_residual_mm": 78.4,
  "n_faces": {
-  "rider": 15688,
+  "rider": 16066,
   "bike": 36950,
   "wheel_rear": 15696,
   "wheel_front": 15700
