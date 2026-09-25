@@ -716,6 +716,49 @@ Jämförelsen störs av att poserna skiljer sig, så det är en indikation, inte
   upplösa dem. Den parametriska modellen utelämnar dem medvetet.
 - Ett löst skräpfragment på 62 trianglar låg i filen.
 
+### Åtgärd: nacken fyller gropen bakom hjälmen (2026-09-25)
+
+Skanningens tydligaste besked gäller siluetten bakåt från hjässan. Mätt som övre
+höljelinjen i en sagittal skiva på ±30 mm, z relativt hjässan:
+
+| mm bakom hjässan | skanning | parametrisk FÖRE | parametrisk EFTER |
+|---|---|---|---|
+| 40 | −2 | −13 | −10 |
+| 60 | −6 | **−134** | −41 |
+| 80 | −11 | −118 | −99 |
+| 140 | −33 | −97 | −98 |
+
+Den parametriska modellen hade ett **lokalt minimum** — ytan föll till −134 och steg sedan
+tillbaka till −97. Alltså en konkav grop, 42 mm djup, samma sorts defekt som hålet på 342 mm
+men mindre. Skanningen har ingen: dess linje faller monotont.
+
+Orsaken satt i koordinaterna. Kappmuskelns framkant slutade vid bygg-x 419 medan hjälmens
+bakre spets ligger vid x 457 — **38 mm glapp** utan något som bar siluetten.
+
+Åtgärden är en fjärde ellipsoid i kappmuskelns skal, `nape`, som fyller glappet framåt-uppåt.
+
+| | före | efter |
+|---|---|---|
+| skårdjup | 42.2 mm | **3.5 mm** |
+| `girth_scale` | 0.9093 | 0.9066 |
+| `rider_implied_mass_kg` | 69.09 | 69.09 |
+| `frontal_area_m2` | 0.3509 | 0.3519 |
+
+**Stoppvillkoret är cellstorleken.** Finaste cellen vid ytan är 3.91 mm, så en grop grundare
+än så kan nätet inte upplösa. Större `nape` gav 1.8 och 1.4 mm men lade till material för
+ingenting — 3.5 mm är under gränsen och där slutar vi.
+
+Massaförankringen sköter sig själv: `calibrate_girth` löser om `g` mot 69 kg, så den tillagda
+halsvolymen krympte resten 0.3 %. Modellen kan alltså inte blåsas upp av den här sortens fix.
+
+**Skanningens absoluta profil jagas INTE.** Dess ryttare har plattare rygg, så rygghöjden
+relativt hjälmen är en poseskillnad och inte ett fel. Bara den lokala gropen är åtgärdad.
+
+Samtidigt: `HELMET['width_mm']` 190 → 205, ur skanningens 260 mm delat med den generella
+uppblåsningen 1.28.
+
+Se `docs/scan/05-nacke-efter.png`.
+
 ## Begränsningar
 - Kroppen är byggd av ellipsoider/konvexa skal – ger rätt volym/siluett, inte veck i löst tyg
 - Ekrar är utelämnade (hjulen = fälg + däck + nav). Navet hänger fritt inuti fälgen.
