@@ -515,7 +515,7 @@ geometrin var 0.0000–0.0007 m². Allt som rör sig mer än så är geometrifix
 Varenda punkt flyttade sig mer än spridningen, och två av dem bytte tecken. Ett 342 mm hål i
 siluetten var alltså inte en kosmetisk defekt utan bar en del av svaret.
 
-#### 10-gradershacket var en artefakt
+#### 10-gradershacket var en artefakt — ÖVERSPELAT, se körningen 2026-09-25
 
 Föregående avsnitt drog slutsatsen att blippen vid 10° var *"inte brus, den är en egenskap hos
 geometrin"* — den reproducerade ju till +0.0029 på fjärde decimalen i två oberoende körningar.
@@ -538,7 +538,7 @@ positionen nu marginellt *sämre*, inte bättre. Siffran är 1.6× sin egen svä
 uppmätta körning-till-körning-spridningen på 0.0010 — den är över brusgolvet, men inte med
 någon marginal att tala om. Läs den som "ingen vinst i stilla luft, möjligen en liten förlust".
 
-#### Vad det kostar i watt (69 kg, 40 km/h, 130 min)
+#### Vad det kostar i watt — ÖVERSPELAT, se körningen 2026-09-25
 
 | vind | typisk yaw | ΔCdA_eff | Δ% | watt | över passet |
 |---|---|---|---|---|---|
@@ -664,6 +664,98 @@ medianavvikelsen mot spegelbilden 5.0 mm, alltså 1 % av bredden.
 Det nedre bandet **ska** vara asymmetriskt — ena benet uppe, andra nere, och kedja, kassett
 och växel sitter bara på höger sida. Där vore spegling fel. Det misstänkta bandet är
 800–1200 mm, höft och bål, som borde vara symmetriskt. Huvudet högst upp är utmärkt.
+
+### Resultat 2026-09-25 med nape + hjälmbredd 205, 2500 iterationer — SLUTSATSERNA HÅLLER INTE
+
+Run 36183594465, commit 70e21da, alla åtta jobb gröna.
+
+| yaw | base CdA ± svängning | tuned CdA ± svängning | ΔCdA |
+|---|---|---|---|
+| +0° | 0.1923 ± 0.0012 | 0.1897 ± 0.0013 | −0.0026 ± 0.0018 |
+| +5° | 0.1983 ± 0.0026 | 0.1889 ± 0.0010 | −0.0095 ± 0.0028 |
+| +10° | 0.1899 ± 0.0012 | 0.1928 ± 0.0017 | **+0.0030** ± 0.0021 |
+| +15° | 0.1918 ± 0.0017 | 0.1912 ± 0.0008 | **−0.0006** ± 0.0019 ⚠ |
+
+#### Deltat är inte konvergerat med avseende på geometridetalj
+
+Det här är körningens viktigaste besked, och det är negativt.
+
+| yaw | A replik 1 | B replik 2 | C kappmuskel | D nape+hjälm |
+|---|---|---|---|---|
+| +0° | −0.0019 | – | +0.0022 | −0.0026 |
+| +5° | −0.0043 | −0.0050 | −0.0064 | −0.0095 |
+| +10° | **+0.0029** | **+0.0029** | **−0.0055** | **+0.0030** |
+| +15° | −0.0118 | −0.0115 | −0.0138 | **−0.0006** |
+
+| | hur mycket deltat flyttade sig |
+|---|---|
+| replik, identisk geometri (B−A) | 0.0000–0.0007, medel 0.0003 |
+| kappmuskeln (C−B) | 0.0014–0.0084, medel 0.0040 |
+| nape + hjälmbredd (D−C) | 0.0031–0.0132, **medel 0.0074** |
+
+**Den andra geometriändringen var mycket mindre än den första och flyttade svaret 1.8 gånger
+mer.** Kappmuskeln fyllde ett hål på 342 mm. `nape` fyllde en grop på 42 mm och breddade
+hjälmen 15 mm. Hade modellen närmat sig ett svar skulle den andra ändringen ha flyttat
+mindre, inte mer.
+
+Successiva förfiningar konvergerar alltså inte. Effekten vi mäter (0.002–0.010 m²) är mindre
+än modellens känslighet för geometridetaljer vi ännu inte fått rätt.
+
+#### Vad som föll
+
+- **10-gradershacket har bytt tecken tre gånger**: +0.0029, +0.0029, −0.0055, +0.0030. Det är
+  inte en egenskap hos geometrin och inte brus i vanlig mening — det följer varje
+  geometriändring. Slutsatsen i föregående avsnitt, att kappmuskeln avslöjade hacket som en
+  artefakt, var för tidig. Hacket kom tillbaka.
+- **15-graderspunkten kollapsade** från −0.0138 till −0.0006 och flaggas nu som mindre än sin
+  egen svängning. Rapportens ord: "Där finns ingen mätbar skillnad mellan positionerna."
+  Nästan hela rörelsen sitter i `tuned`, som gick 0.1801 → 0.1912. Det gamla värdet 0.1801 var
+  det lägsta i hela tabellen, med minsta svängningen, och bar ensamt slutsatsen om att
+  positionsvinsten växer med vinden. Det har inte reproducerats.
+- **CdA_eff-bilden är omvänd.** Förut +1.17 % i stilla luft och −5.25 % vid 20 km/h vind,
+  alltså en vinst som växte med vinden. Nu −1.35 % i stilla luft och −0.83 % vid 20 km/h,
+  alltså en vinst som krymper. Båda kan inte stämma.
+
+#### Fler iterationer var fel medicin
+
+1500 → 2500 iterationer gav **ingen** krympning av svängningsamplituderna:
+
+| | svängning, åtta fall |
+|---|---|
+| 1500 iter | 0.0009 0.0016 0.0013 0.0028 · 0.0011 0.0015 0.0009 0.0010 |
+| 2500 iter | 0.0012 0.0026 0.0012 0.0017 · 0.0013 0.0010 0.0017 0.0008 |
+
+Och konvergensflaggan försvann inte — den **flyttade**, från base vid +15° till base vid +5°.
+En körning som inte konvergerar vid 2500 iterationer och vars oro byter vinkel mellan
+körningar är inte underiterered. Flödet vid yaw är genuint instationärt, och stationär RANS med
+medelvärde över ett fast fönster är fel verktyg för det.
+
+Kontrollen försämrades också: `bike` vid +15° ligger på +0.0029 trots identisk geometri, vilket
+rapporten själv flaggar.
+
+#### Vad som fortfarande står
+
+Bara en sak har varit stabil genom alla fyra körningarna:
+
+- **+5° har varit negativt varje gång**: −0.0043, −0.0050, −0.0064, −0.0095. Tecknet håller.
+  Storleken gör det inte — den har mer än fördubblats.
+
+Allt annat har bytt tecken eller storleksordning minst en gång.
+
+#### Vad som måste göras innan någon siffra används igen
+
+I den här ordningen, och inte fler vinklar:
+
+1. **Nätkonvergens på DELTAT.** Varenda körning hittills är på `medium`. Ändrar sig deltat
+   mellan `medium` och `fine` är siffran inte nätupplöst, och då spelar geometridetaljerna
+   ingen roll än. Det här steget borde ha kommit före allt annat i det här avsnittet.
+2. **Instationär körning eller mycket längre medelvärde vid yaw**, eftersom flödet där inte
+   går mot ett stationärt tillstånd.
+3. Först därefter geometridetaljer.
+
+Tills dess gäller: **reproducerbarheten är utmärkt (0.0003) och noggrannheten okänd.** Att
+samma geometri ger samma svar har vi bevisat fyra gånger. Att svaret är rätt har vi inte
+bevisat en enda gång.
 
 ### Renderingar
 
