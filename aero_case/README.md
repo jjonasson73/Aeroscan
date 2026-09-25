@@ -469,9 +469,10 @@ Konsekvenser:
 - **15-graderspunkten håller.** −0.0118 och −0.0115, skillnad 0.0003 mot en effekt på 0.0115.
   Effekten är trettio gånger spridningen. Vändningen — att positionsvinsten växer med vinden
   — är reell på den här geometrin.
-- **10-gradersblippen är också reell**, om än liten: +0.0029 båda gångerna, exakt. Den är
-  inte brus, den är en egenskap hos geometrin. Men den är bara två gånger sin egen
-  svängningsosäkerhet (±0.0014), så storleken är svagt bestämd.
+- ~~**10-gradersblippen är också reell**~~ — **den här slutsatsen är motbevisad**, se
+  avsnittet med kappmuskeln nedan. +0.0029 båda gångerna, exakt, mätte att samma geometri ger
+  samma svar. Med siluetthålet ifyllt är punkten −0.0055. Reproducerbarhet säger ingenting om
+  huruvida geometrin var rätt.
 - **Kontrollen är utmärkt.** Hjulen ligger på −0.0002 till −0.0011 i båda körningarna, alltså
   noll. Cykeln rör sig mest vid 15 grader (+0.0014 mot −0.0002), vilket är den största
   kontrollavvikelsen och värd att hålla ögonen på.
@@ -487,17 +488,102 @@ Båda körningarna gjordes på geometrin **före** kappmuskeln (commit 7df9390).
 mellan hjälmens bakkant och axeln var 342 mm i dessa körningar och är nu 86 mm, så nästa
 körning ger andra tal.
 
+### Resultat 2026-09-22 MED kappmuskeln (commit 7df9390 och framåt)
+
+Run 35762358159, medium, `[0,5,10,15]`, containerbild. Alla åtta jobb gröna — inklusive
+`y0-base`, som föll två gånger på aptstallet och nu för första gången har ett värde.
+
+| yaw | base CdA ± svängning | tuned CdA ± svängning | ΔCdA |
+|---|---|---|---|
+| +0° | 0.1896 ± 0.0009 | 0.1918 ± 0.0011 | **+0.0022** ± 0.0014 |
+| +5° | 0.1959 ± 0.0016 | 0.1895 ± 0.0015 | −0.0064 ± 0.0022 |
+| +10° | 0.1931 ± 0.0013 | 0.1876 ± 0.0009 | −0.0055 ± 0.0015 |
+| +15° | 0.1939 ± 0.0028 | 0.1801 ± 0.0010 | −0.0138 ± 0.0030 |
+
+#### Kappmuskeln flyttade DELTAT, inte bara absolutvärdet
+
+Det var frågan som körningen fanns till för att svara på. Replikspridningen på den gamla
+geometrin var 0.0000–0.0007 m². Allt som rör sig mer än så är geometrifixen.
+
+| yaw | ΔCdA före | ΔCdA efter | flytt | mot spridning |
+|---|---|---|---|---|
+| +0° | −0.0019 | **+0.0022** | +0.0041 | 5.9× |
+| +5° | −0.0046 | −0.0064 | −0.0018 | 2.5× |
+| +10° | **+0.0029** | **−0.0055** | −0.0084 | **12×** |
+| +15° | −0.0117 | −0.0138 | −0.0021 | 3.1× |
+
+Varenda punkt flyttade sig mer än spridningen, och två av dem bytte tecken. Ett 342 mm hål i
+siluetten var alltså inte en kosmetisk defekt utan bar en del av svaret.
+
+#### 10-gradershacket var en artefakt
+
+Föregående avsnitt drog slutsatsen att blippen vid 10° var *"inte brus, den är en egenskap hos
+geometrin"* — den reproducerade ju till +0.0029 på fjärde decimalen i två oberoende körningar.
+Den slutsatsen var fel. Med hålet ifyllt är punkten −0.0055, alltså i linje med grannarna.
+
+Reproducerbarheten var äkta. Den mätte bara att samma geometri ger samma svar, inte att
+geometrin var rätt. Det är precis den felkälla som determinism inte kan upptäcka.
+
+Kurvan är nu fysikaliskt läsbar: ingen vinst rakt framifrån, ett steg ner till ungefär −0.006
+vid 5–10° (de två punkterna är oskiljbara inom sina felstaplar), och en större vinst vid 15°.
+
+#### Stilla luft har bytt tecken
+
+Absolut `base` CdA vid 0° föll från 0.1956 till 0.1896 — den största absoluta ändringen i hela
+tabellen, och den sitter just vid den vinkel där flödet går rakt in i skåran. Vid 10° gick den
+i stället **upp** 0.0044. Fixen är alltså inte en konstant förskjutning.
+
+Deltat vid 0° gick från −0.0019 till **+0.0022 ± 0.0014**. I stilla luft är den trimmade
+positionen nu marginellt *sämre*, inte bättre. Siffran är 1.6× sin egen svängning och 2.2× den
+uppmätta körning-till-körning-spridningen på 0.0010 — den är över brusgolvet, men inte med
+någon marginal att tala om. Läs den som "ingen vinst i stilla luft, möjligen en liten förlust".
+
+#### Vad det kostar i watt (69 kg, 40 km/h, 130 min)
+
+| vind | typisk yaw | ΔCdA_eff | Δ% | watt | över passet |
+|---|---|---|---|---|---|
+| 0 km/h | 0° | +0.0022 | +1.17 % | **+1.8 W** | +4 Wh |
+| 5 km/h | 7° | −0.0043 | −2.17 % | −3.6 W | −8 Wh |
+| 10 km/h | 14° | −0.0075 | −3.65 % | −6.3 W | −14 Wh |
+| 15 km/h | 22° | −0.0107 | −4.86 % | −9.0 W | −20 Wh |
+| 20 km/h | 30° | −0.0127 | −5.25 % | −10.7 W | −23 Wh |
+
+Brytpunkten ligger mellan 0 och 5 km/h vind. I praktiken: positionen betalar sig så fort det
+blåser alls, och kostar knappt något när det inte gör det. Vinsten är också större än före
+fixen — −5.25 % mot −3.97 % vid 20 km/h.
+
+#### Förbehåll på den här körningen
+
+- **15-graderspunkten bär den största effekten och har den svagaste grunden.** Rapporten
+  flaggar att kraften fortfarande lutar i fönstret för `base` vid +15° — körningen avbröts vid
+  iterationsgränsen utan att konvergera. Svängningen är också störst där (±0.0028). Vinkeln som
+  driver hela slutsatsen om sidvind är alltså den som behöver fler iterationer.
+- **Kontrollen håller.** Hjulen ligger på −0.0001 till −0.0012, alltså noll. Cykeln är störst
+  vid +5° med +0.0015, vilket är en femtedel av ryttarens −0.0075 vid samma vinkel. Samma
+  storleksordning som före fixen.
+- **En replik per punkt igen.** Den här körningen har inga repliker på den nya geometrin, så
+  spridningen 0.0000–0.0007 m² är lånad från den gamla. Rimligt, men lånad.
+- Fortfarande bara plussidan av noll.
+
 ### Vad som INTE är avgjort
 
-- **0-graderspunkten är under brusgolvet** och flaggad. Påståendet att positionen är snabbare
-  i stilla luft har alltså inget stöd i den här körningen.
-- **En replik per punkt.** Hela vändningen vilar på enskilda körningar, och 15-graderspunkten
-  som bär den största effekten är ett enda värde.
-- **Bara plussidan av noll.** Cyklisten är inte spegelsymmetrisk.
-- Svängningsamplituderna (±0.0007 till ±0.0018) är större än det brusgolv på 0.0010 som mättes
-  vid 0 grader på den gamla geometrin. Använd ± i tabellen, inte 0.0010.
+Uppdaterat efter körningen med kappmuskeln.
 
-Nästa steg som faktiskt avgör något: **repliker**, inte fler vinklar.
+- **15-graderspunkten är inte konvergerad.** `base` vid +15° avbröts vid iterationsgränsen med
+  kraften fortfarande lutande. Det är den punkt som bär den största effekten i hela svepet.
+  Detta är den enskilt viktigaste bristen just nu.
+- **Stilla luft är fortfarande inte avgjort**, men av motsatt skäl mot förut. Deltat vid 0° är
+  nu +0.0022 ± 0.0014, alltså nätt och jämnt över brusgolvet och med fel tecken mot vad vi
+  först trodde. Påståendet är "ingen vinst i stilla luft", inte "en vinst" och inte "en
+  säkerställd förlust".
+- **Inga repliker på den nya geometrin.** Spridningen 0.0000–0.0007 m² är mätt på geometrin
+  före kappmuskeln och lånad hit.
+- **Bara plussidan av noll.** Cyklisten är inte spegelsymmetrisk.
+- Svängningsamplituderna (±0.0009 till ±0.0030) är större än brusgolvet på 0.0010. Använd ± i
+  tabellen, inte 0.0010.
+
+Nästa steg som faktiskt avgör något, i ordning: **fler iterationer vid 15°**, sedan
+**repliker på den nya geometrin**. Fler vinklar avgör ingenting.
 
 ### Kostnader att känna till
 - **Nätet är detsamma vid alla vinklar.** Svepet kör `configure_case.sh ... wide`, som
@@ -513,6 +599,122 @@ Nästa steg som faktiskt avgör något: **repliker**, inte fler vinklar.
   om det.
 - En replik per punkt. Spridningen mellan körningar är 0.0010 m², så skillnader under
   ca 0.0014 m² går inte att skilja från brus.
+
+## Foto-genererad 3D-modell (2026-09-25)
+
+En AI-genererad STL från fotot, `3D.from.pic.stl`, 1 760 114 trianglar, 88 MB. Rå fil ligger
+som release-asset `scan-v1`, inte i git.
+
+### Skalan går att låsa mot hjulet
+
+Modellen kommer i godtyckliga enheter, normerad till en 100-enheters låda. Skalan hämtas ur
+hjulet, som är den mest välbestämda geometrin i hela meshen — 700c + 25 mm däck = 672 mm.
+
+Hough-ackumulering på centrumplanet, med villkoret att båda hjulen står på samma golv
+(`cz = zmin + r`). Utan det villkoret låser sökningen på kramkransen, som är en renare cirkel
+än hjulet.
+
+**16.6337 mm/enhet.** Fyra oberoende kontroller på den skalan:
+
+| mått | modellen | verkligt |
+|---|---|---|
+| hjulradie fram vs bak | identiska | – |
+| hjulbas | 965 mm | 980–1020 |
+| hjulbas / hjuldiameter | 1.436 | 1.46–1.52 |
+| totallängd × bredd × höjd | 1663 × 506 × 1375 mm | rimligt |
+
+Cykeln är alltså rätt proportionerad.
+
+### Men kroppen är generisk, inte vår ryttare
+
+| | skanning | parametrisk |
+|---|---|---|
+| total volym | 0.1232 m³ | 0.0896 m³ |
+| frontalarea (samma rastermetod) | 0.4602 m² | 0.3599 m² |
+
+Ryttarens volym blir ~0.108 m³, vilket vid 1016 kg/m³ ger **105–110 kg**. Ryttaren väger 69.
+
+Det går inte att skala bort: för 69 kg måste allt krympa 13 %, och då blir hjulen 587 mm och
+hjulbasen 843 mm. Verktyget byggde en generisk kropp i cykelns skala.
+
+Uppblåsningen är **jämnt utspridd**, inte lokaliserad till löst tyg på benen:
+
+| höjd över mark | kvot skanning/parametrisk |
+|---|---|
+| 200–400 mm (fötter, vev) | 1.28× |
+| 400–700 mm (vader, lår) | 1.24× |
+| 700–900 mm (lår, höft) | 1.22× |
+| **900–1200 mm (bål, armar)** | **1.39×** |
+| 1200–1300 mm (rygg, nacke) | 1.19× |
+
+Värsta bandet är bålen och armarna. En rak inbytning av överkroppen skulle alltså importera
+den mest uppblåsta regionen.
+
+### Symmetri
+
+Bästa symmetriplanet ligger på **y = +17.5 mm**, inte noll. Efter centrering är
+medianavvikelsen mot spegelbilden 5.0 mm, alltså 1 % av bredden.
+
+| höjd över mark | median | p90 |
+|---|---|---|
+| 200–600 mm | 3–9 mm | 87–109 mm |
+| 800–1200 mm | 8 mm | 41–54 mm |
+| 1200–1400 mm | 3.2 mm | 8.7 mm |
+
+Det nedre bandet **ska** vara asymmetriskt — ena benet uppe, andra nere, och kedja, kassett
+och växel sitter bara på höger sida. Där vore spegling fel. Det misstänkta bandet är
+800–1200 mm, höft och bål, som borde vara symmetriskt. Huvudet högst upp är utmärkt.
+
+### Renderingar
+
+Vyerna som mätningarna nedan bygger på ligger i `docs/scan/`:
+
+| fil | vad den visar |
+|---|---|
+| `01-helvy.png` | hela modellen från sidan |
+| `02-huvudparti-rutnat.png` | huvudpartiet med mm-rutnät i x och z — den mest användbara |
+| `03-huvudholje-tre-vyer.png` | det utskurna huvudhöljet, sida/fram/ovan |
+| `04-siluettjamforelse.png` | sagittalsiluett mot den parametriska modellen, uppriktade i hjässan |
+
+Siluettjämförelsen är svårläst eftersom poserna skiljer sig påtagligt. Läs den med skepsis.
+
+### Huvudpartiet: `geometry/scan_head_shell.stl`
+
+Hjälmen och huvudet är ett sammansmält skal utan söm, så hjälmen går inte att skära ut för
+sig. Det som finns incheckat är huvudpartiets ytterhölje, x < −295, z > 1232, |y| < 150,
+nedsamplat till 40 k trianglar. Referensgeometri, inte körbar.
+
+Hjälmens mått, med armarna uteslutna (x ∈ [−600, −360]):
+
+| | längd | bredd | höjd |
+|---|---|---|---|
+| skanning rå | 275 | 260 | (140, trunkerad av snittet) |
+| skanning ÷1.28 | 215 | 203 | – |
+| `HELMET` i dag | 280 | 190 | 165 |
+
+Längden stämmer. Bredden är ~7 % större än modellens efter uppblåsningskorrigering.
+Höjdsiffran duger inte — mätfönstret skär av hjälmens underkant.
+
+Frontalarean räknad **nedåt från varje modells egen hjässa**, vilket tar bort poseskillnaden
+(skanningens ryttare sitter 28 mm lägre):
+
+| mm under hjässan | kvot | mot baslinjen 1.28× |
+|---|---|---|
+| 0–80 | 1.25–1.47 | normal |
+| **80–120** | **1.67–2.01** | **kraftigt över** |
+| 120–300 | 1.21–1.48 | normal |
+
+80–120 mm under hjässan är övergången hjälm–axel, alltså samma region som kappmuskeln
+fyllde. Skanningen säger att den fortfarande är för smal i den parametriska modellen.
+Jämförelsen störs av att poserna skiljer sig, så det är en indikation, inte ett mått.
+
+### Övrigt som skulle bitit senare
+
+- **Euler-tal −602**, alltså 302 genomgående tunnlar i ytan. Osynliga i renderingen, men
+  `surfaceFeatureExtract` skulle bli tokig på dem.
+- **Ekrarna finns med.** Riktiga ekrar är ~2 mm mot finaste cellen 3.91 mm. Snappy kan inte
+  upplösa dem. Den parametriska modellen utelämnar dem medvetet.
+- Ett löst skräpfragment på 62 trianglar låg i filen.
 
 ## Begränsningar
 - Kroppen är byggd av ellipsoider/konvexa skal – ger rätt volym/siluett, inte veck i löst tyg
