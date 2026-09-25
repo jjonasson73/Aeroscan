@@ -665,6 +665,19 @@ Det nedre bandet **ska** vara asymmetriskt — ena benet uppe, andra nere, och k
 och växel sitter bara på höger sida. Där vore spegling fel. Det misstänkta bandet är
 800–1200 mm, höft och bål, som borde vara symmetriskt. Huvudet högst upp är utmärkt.
 
+### Renderingar
+
+Vyerna som mätningarna nedan bygger på ligger i `docs/scan/`:
+
+| fil | vad den visar |
+|---|---|
+| `01-helvy.png` | hela modellen från sidan |
+| `02-huvudparti-rutnat.png` | huvudpartiet med mm-rutnät i x och z — den mest användbara |
+| `03-huvudholje-tre-vyer.png` | det utskurna huvudhöljet, sida/fram/ovan |
+| `04-siluettjamforelse.png` | sagittalsiluett mot den parametriska modellen, uppriktade i hjässan |
+
+Siluettjämförelsen är svårläst eftersom poserna skiljer sig påtagligt. Läs den med skepsis.
+
 ### Huvudpartiet: `geometry/scan_head_shell.stl`
 
 Hjälmen och huvudet är ett sammansmält skal utan söm, så hjälmen går inte att skära ut för
