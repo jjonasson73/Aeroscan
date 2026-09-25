@@ -600,6 +600,109 @@ Nästa steg som faktiskt avgör något, i ordning: **fler iterationer vid 15°**
 - En replik per punkt. Spridningen mellan körningar är 0.0010 m², så skillnader under
   ca 0.0014 m² går inte att skilja från brus.
 
+## Foto-genererad 3D-modell (2026-09-25)
+
+En AI-genererad STL från fotot, `3D.from.pic.stl`, 1 760 114 trianglar, 88 MB. Rå fil ligger
+som release-asset `scan-v1`, inte i git.
+
+### Skalan går att låsa mot hjulet
+
+Modellen kommer i godtyckliga enheter, normerad till en 100-enheters låda. Skalan hämtas ur
+hjulet, som är den mest välbestämda geometrin i hela meshen — 700c + 25 mm däck = 672 mm.
+
+Hough-ackumulering på centrumplanet, med villkoret att båda hjulen står på samma golv
+(`cz = zmin + r`). Utan det villkoret låser sökningen på kramkransen, som är en renare cirkel
+än hjulet.
+
+**16.6337 mm/enhet.** Fyra oberoende kontroller på den skalan:
+
+| mått | modellen | verkligt |
+|---|---|---|
+| hjulradie fram vs bak | identiska | – |
+| hjulbas | 965 mm | 980–1020 |
+| hjulbas / hjuldiameter | 1.436 | 1.46–1.52 |
+| totallängd × bredd × höjd | 1663 × 506 × 1375 mm | rimligt |
+
+Cykeln är alltså rätt proportionerad.
+
+### Men kroppen är generisk, inte vår ryttare
+
+| | skanning | parametrisk |
+|---|---|---|
+| total volym | 0.1232 m³ | 0.0896 m³ |
+| frontalarea (samma rastermetod) | 0.4602 m² | 0.3599 m² |
+
+Ryttarens volym blir ~0.108 m³, vilket vid 1016 kg/m³ ger **105–110 kg**. Ryttaren väger 69.
+
+Det går inte att skala bort: för 69 kg måste allt krympa 13 %, och då blir hjulen 587 mm och
+hjulbasen 843 mm. Verktyget byggde en generisk kropp i cykelns skala.
+
+Uppblåsningen är **jämnt utspridd**, inte lokaliserad till löst tyg på benen:
+
+| höjd över mark | kvot skanning/parametrisk |
+|---|---|
+| 200–400 mm (fötter, vev) | 1.28× |
+| 400–700 mm (vader, lår) | 1.24× |
+| 700–900 mm (lår, höft) | 1.22× |
+| **900–1200 mm (bål, armar)** | **1.39×** |
+| 1200–1300 mm (rygg, nacke) | 1.19× |
+
+Värsta bandet är bålen och armarna. En rak inbytning av överkroppen skulle alltså importera
+den mest uppblåsta regionen.
+
+### Symmetri
+
+Bästa symmetriplanet ligger på **y = +17.5 mm**, inte noll. Efter centrering är
+medianavvikelsen mot spegelbilden 5.0 mm, alltså 1 % av bredden.
+
+| höjd över mark | median | p90 |
+|---|---|---|
+| 200–600 mm | 3–9 mm | 87–109 mm |
+| 800–1200 mm | 8 mm | 41–54 mm |
+| 1200–1400 mm | 3.2 mm | 8.7 mm |
+
+Det nedre bandet **ska** vara asymmetriskt — ena benet uppe, andra nere, och kedja, kassett
+och växel sitter bara på höger sida. Där vore spegling fel. Det misstänkta bandet är
+800–1200 mm, höft och bål, som borde vara symmetriskt. Huvudet högst upp är utmärkt.
+
+### Huvudpartiet: `geometry/scan_head_shell.stl`
+
+Hjälmen och huvudet är ett sammansmält skal utan söm, så hjälmen går inte att skära ut för
+sig. Det som finns incheckat är huvudpartiets ytterhölje, x < −295, z > 1232, |y| < 150,
+nedsamplat till 40 k trianglar. Referensgeometri, inte körbar.
+
+Hjälmens mått, med armarna uteslutna (x ∈ [−600, −360]):
+
+| | längd | bredd | höjd |
+|---|---|---|---|
+| skanning rå | 275 | 260 | (140, trunkerad av snittet) |
+| skanning ÷1.28 | 215 | 203 | – |
+| `HELMET` i dag | 280 | 190 | 165 |
+
+Längden stämmer. Bredden är ~7 % större än modellens efter uppblåsningskorrigering.
+Höjdsiffran duger inte — mätfönstret skär av hjälmens underkant.
+
+Frontalarean räknad **nedåt från varje modells egen hjässa**, vilket tar bort poseskillnaden
+(skanningens ryttare sitter 28 mm lägre):
+
+| mm under hjässan | kvot | mot baslinjen 1.28× |
+|---|---|---|
+| 0–80 | 1.25–1.47 | normal |
+| **80–120** | **1.67–2.01** | **kraftigt över** |
+| 120–300 | 1.21–1.48 | normal |
+
+80–120 mm under hjässan är övergången hjälm–axel, alltså samma region som kappmuskeln
+fyllde. Skanningen säger att den fortfarande är för smal i den parametriska modellen.
+Jämförelsen störs av att poserna skiljer sig, så det är en indikation, inte ett mått.
+
+### Övrigt som skulle bitit senare
+
+- **Euler-tal −602**, alltså 302 genomgående tunnlar i ytan. Osynliga i renderingen, men
+  `surfaceFeatureExtract` skulle bli tokig på dem.
+- **Ekrarna finns med.** Riktiga ekrar är ~2 mm mot finaste cellen 3.91 mm. Snappy kan inte
+  upplösa dem. Den parametriska modellen utelämnar dem medvetet.
+- Ett löst skräpfragment på 62 trianglar låg i filen.
+
 ## Begränsningar
 - Kroppen är byggd av ellipsoider/konvexa skal – ger rätt volym/siluett, inte veck i löst tyg
 - Ekrar är utelämnade (hjulen = fälg + däck + nav). Navet hänger fritt inuti fälgen.
