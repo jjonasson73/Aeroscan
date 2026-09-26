@@ -55,6 +55,48 @@ functions
     yPlus      { type yPlus; libs (fieldFunctionObjects); writeControl writeTime; }
     wallShearStress { type wallShearStress; libs (fieldFunctionObjects); writeControl writeTime; }
 
+    // Fältdata för efterbehandling. En CdA-siffra säger att något är fel men inte var, och
+    // när deltat inte är stabilt är ytfälten enda sättet att se varför. Skrivs bara vid
+    // writeTime, alltså en gång i slutet - inte per iteration.
+    //
+    // p är kinematiskt tryck (p/rho, m^2/s^2). Cp = p / (0.5 * magUInf^2).
+    // wallShearStress x-komponenten byter tecken där flödet vänder: det är separationslinjen.
+    diagSurfaces
+    {
+        type            surfaces;
+        libs            (sampling);
+        writeControl    writeTime;
+        surfaceFormat   vtk;
+        fields          (p wallShearStress);
+        surfaces
+        {
+            s_rider       { type patch; patches (rider); }
+            s_bike        { type patch; patches (bike); }
+            s_wheel_rear  { type patch; patches (wheel_rear); }
+            s_wheel_front { type patch; patches (wheel_front); }
+        }
+    }
+
+    // Symmetrisnittet visar vaken: var trycket sjunker och var turbulensen produceras.
+    diagSlice
+    {
+        type            surfaces;
+        libs            (sampling);
+        writeControl    writeTime;
+        surfaceFormat   vtk;
+        fields          (p U k nut);
+        surfaces
+        {
+            midplane
+            {
+                type            cuttingPlane;
+                point           (0 0 0);
+                normal          (0 1 0);
+                interpolate     true;
+            }
+        }
+    }
+
     // Avbryt automatiskt när CdA har stabiliserats (glidande medel ändras < 0.2 %).
     // timeStart håller villkoret vilande under det inledande transientet: utan det kan
     // medelvärdet råka ligga still runt iteration ~150 medan lösningen fortfarande

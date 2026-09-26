@@ -515,7 +515,7 @@ geometrin var 0.0000–0.0007 m². Allt som rör sig mer än så är geometrifix
 Varenda punkt flyttade sig mer än spridningen, och två av dem bytte tecken. Ett 342 mm hål i
 siluetten var alltså inte en kosmetisk defekt utan bar en del av svaret.
 
-#### 10-gradershacket var en artefakt
+#### 10-gradershacket var en artefakt — ÖVERSPELAT, se körningen 2026-09-25
 
 Föregående avsnitt drog slutsatsen att blippen vid 10° var *"inte brus, den är en egenskap hos
 geometrin"* — den reproducerade ju till +0.0029 på fjärde decimalen i två oberoende körningar.
@@ -538,7 +538,7 @@ positionen nu marginellt *sämre*, inte bättre. Siffran är 1.6× sin egen svä
 uppmätta körning-till-körning-spridningen på 0.0010 — den är över brusgolvet, men inte med
 någon marginal att tala om. Läs den som "ingen vinst i stilla luft, möjligen en liten förlust".
 
-#### Vad det kostar i watt (69 kg, 40 km/h, 130 min)
+#### Vad det kostar i watt — ÖVERSPELAT, se körningen 2026-09-25
 
 | vind | typisk yaw | ΔCdA_eff | Δ% | watt | över passet |
 |---|---|---|---|---|---|
@@ -665,6 +665,98 @@ Det nedre bandet **ska** vara asymmetriskt — ena benet uppe, andra nere, och k
 och växel sitter bara på höger sida. Där vore spegling fel. Det misstänkta bandet är
 800–1200 mm, höft och bål, som borde vara symmetriskt. Huvudet högst upp är utmärkt.
 
+### Resultat 2026-09-25 med nape + hjälmbredd 205, 2500 iterationer — SLUTSATSERNA HÅLLER INTE
+
+Run 36183594465, commit 70e21da, alla åtta jobb gröna.
+
+| yaw | base CdA ± svängning | tuned CdA ± svängning | ΔCdA |
+|---|---|---|---|
+| +0° | 0.1923 ± 0.0012 | 0.1897 ± 0.0013 | −0.0026 ± 0.0018 |
+| +5° | 0.1983 ± 0.0026 | 0.1889 ± 0.0010 | −0.0095 ± 0.0028 |
+| +10° | 0.1899 ± 0.0012 | 0.1928 ± 0.0017 | **+0.0030** ± 0.0021 |
+| +15° | 0.1918 ± 0.0017 | 0.1912 ± 0.0008 | **−0.0006** ± 0.0019 ⚠ |
+
+#### Deltat är inte konvergerat med avseende på geometridetalj
+
+Det här är körningens viktigaste besked, och det är negativt.
+
+| yaw | A replik 1 | B replik 2 | C kappmuskel | D nape+hjälm |
+|---|---|---|---|---|
+| +0° | −0.0019 | – | +0.0022 | −0.0026 |
+| +5° | −0.0043 | −0.0050 | −0.0064 | −0.0095 |
+| +10° | **+0.0029** | **+0.0029** | **−0.0055** | **+0.0030** |
+| +15° | −0.0118 | −0.0115 | −0.0138 | **−0.0006** |
+
+| | hur mycket deltat flyttade sig |
+|---|---|
+| replik, identisk geometri (B−A) | 0.0000–0.0007, medel 0.0003 |
+| kappmuskeln (C−B) | 0.0014–0.0084, medel 0.0040 |
+| nape + hjälmbredd (D−C) | 0.0031–0.0132, **medel 0.0074** |
+
+**Den andra geometriändringen var mycket mindre än den första och flyttade svaret 1.8 gånger
+mer.** Kappmuskeln fyllde ett hål på 342 mm. `nape` fyllde en grop på 42 mm och breddade
+hjälmen 15 mm. Hade modellen närmat sig ett svar skulle den andra ändringen ha flyttat
+mindre, inte mer.
+
+Successiva förfiningar konvergerar alltså inte. Effekten vi mäter (0.002–0.010 m²) är mindre
+än modellens känslighet för geometridetaljer vi ännu inte fått rätt.
+
+#### Vad som föll
+
+- **10-gradershacket har bytt tecken tre gånger**: +0.0029, +0.0029, −0.0055, +0.0030. Det är
+  inte en egenskap hos geometrin och inte brus i vanlig mening — det följer varje
+  geometriändring. Slutsatsen i föregående avsnitt, att kappmuskeln avslöjade hacket som en
+  artefakt, var för tidig. Hacket kom tillbaka.
+- **15-graderspunkten kollapsade** från −0.0138 till −0.0006 och flaggas nu som mindre än sin
+  egen svängning. Rapportens ord: "Där finns ingen mätbar skillnad mellan positionerna."
+  Nästan hela rörelsen sitter i `tuned`, som gick 0.1801 → 0.1912. Det gamla värdet 0.1801 var
+  det lägsta i hela tabellen, med minsta svängningen, och bar ensamt slutsatsen om att
+  positionsvinsten växer med vinden. Det har inte reproducerats.
+- **CdA_eff-bilden är omvänd.** Förut +1.17 % i stilla luft och −5.25 % vid 20 km/h vind,
+  alltså en vinst som växte med vinden. Nu −1.35 % i stilla luft och −0.83 % vid 20 km/h,
+  alltså en vinst som krymper. Båda kan inte stämma.
+
+#### Fler iterationer var fel medicin
+
+1500 → 2500 iterationer gav **ingen** krympning av svängningsamplituderna:
+
+| | svängning, åtta fall |
+|---|---|
+| 1500 iter | 0.0009 0.0016 0.0013 0.0028 · 0.0011 0.0015 0.0009 0.0010 |
+| 2500 iter | 0.0012 0.0026 0.0012 0.0017 · 0.0013 0.0010 0.0017 0.0008 |
+
+Och konvergensflaggan försvann inte — den **flyttade**, från base vid +15° till base vid +5°.
+En körning som inte konvergerar vid 2500 iterationer och vars oro byter vinkel mellan
+körningar är inte underiterered. Flödet vid yaw är genuint instationärt, och stationär RANS med
+medelvärde över ett fast fönster är fel verktyg för det.
+
+Kontrollen försämrades också: `bike` vid +15° ligger på +0.0029 trots identisk geometri, vilket
+rapporten själv flaggar.
+
+#### Vad som fortfarande står
+
+Bara en sak har varit stabil genom alla fyra körningarna:
+
+- **+5° har varit negativt varje gång**: −0.0043, −0.0050, −0.0064, −0.0095. Tecknet håller.
+  Storleken gör det inte — den har mer än fördubblats.
+
+Allt annat har bytt tecken eller storleksordning minst en gång.
+
+#### Vad som måste göras innan någon siffra används igen
+
+I den här ordningen, och inte fler vinklar:
+
+1. **Nätkonvergens på DELTAT.** Varenda körning hittills är på `medium`. Ändrar sig deltat
+   mellan `medium` och `fine` är siffran inte nätupplöst, och då spelar geometridetaljerna
+   ingen roll än. Det här steget borde ha kommit före allt annat i det här avsnittet.
+2. **Instationär körning eller mycket längre medelvärde vid yaw**, eftersom flödet där inte
+   går mot ett stationärt tillstånd.
+3. Först därefter geometridetaljer.
+
+Tills dess gäller: **reproducerbarheten är utmärkt (0.0003) och noggrannheten okänd.** Att
+samma geometri ger samma svar har vi bevisat fyra gånger. Att svaret är rätt har vi inte
+bevisat en enda gång.
+
 ### Renderingar
 
 Vyerna som mätningarna nedan bygger på ligger i `docs/scan/`:
@@ -675,16 +767,31 @@ Vyerna som mätningarna nedan bygger på ligger i `docs/scan/`:
 | `02-huvudparti-rutnat.png` | huvudpartiet med mm-rutnät i x och z — den mest användbara |
 | `03-huvudholje-tre-vyer.png` | det utskurna huvudhöljet, sida/fram/ovan |
 | `04-siluettjamforelse.png` | sagittalsiluett mot den parametriska modellen, uppriktade i hjässan |
+| `06-hjalm-kapad.png` | den kapade hjälmen i tre vyer, med bakstyckesgallring |
 
 Siluettjämförelsen är svårläst eftersom poserna skiljer sig påtagligt. Läs den med skepsis.
 
-### Huvudpartiet: `geometry/scan_head_shell.stl`
+### Huvudpartiet: `geometry/scan_helmet_crop.stl`
 
-Hjälmen och huvudet är ett sammansmält skal utan söm, så hjälmen går inte att skära ut för
-sig. Det som finns incheckat är huvudpartiets ytterhölje, x < −295, z > 1232, |y| < 150,
-nedsamplat till 40 k trianglar. Referensgeometri, inte körbar.
+Hjälmen och huvudet är ett sammansmält skal **utan söm**, så hjälmen går inte att skära ut för
+sig. Två metoder provade, båda misslyckas:
 
-Hjälmens mått, med armarna uteslutna (x ∈ [−600, −360]):
+- **Planskärning** tar antingen med axelkrönet eller klipper hjälmens bakkant. Det finns ingen
+  plannivå som skiljer dem.
+- **Regionväxt längs ytan**, som ska stanna vid en skarp kant, rinner över 85 % av meshen redan
+  vid 18° tröskel. Skanningen har ingen skarp kant vid hjälmbrättet — ytan är slät hela vägen.
+
+Det som ligger incheckat är därför en **kapad låda**, x < −348, z > 1250, |y| < 118: vattentät,
+30 k trianglar, 241 × 236 × 125 mm. Referensgeometri, inte körbar.
+
+> **De plana ytorna i filen är mina snittplan, inte geometri.** Likaså sitter små utskjutande
+> flikar kvar i bakkanten där nacke och axel passerar snittet. Öppnas filen i en visare som
+> inte kullar baksidor ser de ut som vingar på hjälmen. Det är de inte.
+>
+> En tidigare version, `scan_head_shell.stl`, var dessutom **öppen** — snitten kapades inte —
+> så visaren ritade skalets insida genom hålen. Den filen är borttagen.
+
+Hjälmens mått, med armarna uteslutna Hjälmens mått, med armarna uteslutna (x ∈ [−600, −360]):
 
 | | längd | bredd | höjd |
 |---|---|---|---|
@@ -715,6 +822,89 @@ Jämförelsen störs av att poserna skiljer sig, så det är en indikation, inte
 - **Ekrarna finns med.** Riktiga ekrar är ~2 mm mot finaste cellen 3.91 mm. Snappy kan inte
   upplösa dem. Den parametriska modellen utelämnar dem medvetet.
 - Ett löst skräpfragment på 62 trianglar låg i filen.
+
+### Åtgärd: nacken fyller gropen bakom hjälmen (2026-09-25)
+
+Skanningens tydligaste besked gäller siluetten bakåt från hjässan. Mätt som övre
+höljelinjen i en sagittal skiva på ±30 mm, z relativt hjässan:
+
+| mm bakom hjässan | skanning | parametrisk FÖRE | parametrisk EFTER |
+|---|---|---|---|
+| 40 | −2 | −13 | −10 |
+| 60 | −6 | **−134** | −41 |
+| 80 | −11 | −118 | −99 |
+| 140 | −33 | −97 | −98 |
+
+Den parametriska modellen hade ett **lokalt minimum** — ytan föll till −134 och steg sedan
+tillbaka till −97. Alltså en konkav grop, 42 mm djup, samma sorts defekt som hålet på 342 mm
+men mindre. Skanningen har ingen: dess linje faller monotont.
+
+Orsaken satt i koordinaterna. Kappmuskelns framkant slutade vid bygg-x 419 medan hjälmens
+bakre spets ligger vid x 457 — **38 mm glapp** utan något som bar siluetten.
+
+Åtgärden är en fjärde ellipsoid i kappmuskelns skal, `nape`, som fyller glappet framåt-uppåt.
+
+| | före | efter |
+|---|---|---|
+| skårdjup | 42.2 mm | **3.5 mm** |
+| `girth_scale` | 0.9093 | 0.9066 |
+| `rider_implied_mass_kg` | 69.09 | 69.09 |
+| `frontal_area_m2` | 0.3509 | 0.3519 |
+
+**Stoppvillkoret är cellstorleken.** Finaste cellen vid ytan är 3.91 mm, så en grop grundare
+än så kan nätet inte upplösa. Större `nape` gav 1.8 och 1.4 mm men lade till material för
+ingenting — 3.5 mm är under gränsen och där slutar vi.
+
+Massaförankringen sköter sig själv: `calibrate_girth` löser om `g` mot 69 kg, så den tillagda
+halsvolymen krympte resten 0.3 %. Modellen kan alltså inte blåsas upp av den här sortens fix.
+
+**Skanningens absoluta profil jagas INTE.** Dess ryttare har plattare rygg, så rygghöjden
+relativt hjälmen är en poseskillnad och inte ett fel. Bara den lokala gropen är åtgärdad.
+
+Samtidigt: `HELMET['width_mm']` 190 → 205, ur skanningens 260 mm delat med den generella
+uppblåsningen 1.28.
+
+Se `docs/scan/05-nacke-efter.png`.
+
+### Fältbilder: `tools/plot_fields.py`
+
+En CdA-siffra säger att något är fel men aldrig var. När deltat inte är stabilt är ytfälten
+enda sättet att se varför, så körningarna sparar dem nu.
+
+`system/controlDict` har två nya function objects som skriver **en gång, vid sista
+iterationen** — inte per iteration:
+
+| | vad |
+|---|---|
+| `diagSurfaces` | `p` och `wallShearStress` på rider, bike och båda hjulen |
+| `diagSlice` | `p`, `U`, `k`, `nut` i symmetrisnittet y = 0 |
+
+`Collect` packar dem som `fields.tar.gz` i artefakten. Utan det steget slängs fälten när
+runnern rivs, vilket är vad som hänt i alla körningar hittills.
+
+Rendera lokalt:
+
+```
+python3 tools/plot_fields.py <utpackad artefakt> <utkatalog> --uinf 12.5 --tag y10-base
+```
+
+Ger `cp_side`, `cp_top`, `tau_mag_side` och `tau_x_side`.
+
+**Färgvalen är inte smak.** Cp och skillnadskartor är divergerande, blå ↔ grå ↔ röd med noll i
+grått. `|tau_w|` är sekventiell, en hue ljus→mörk. `tau_x` är divergerande, och då är det grå
+bandet **separationslinjen** — där väggskjuvningen byter tecken och flödet vänder.
+
+Aldrig regnbåge. En regnbågsskala lägger falska kanter där hue:n hoppar, och i ett tryckfält
+läses de kanterna lätt som fysik. Det är den vanligaste lögnen i CFD-bilder.
+
+**Bakstyckesgallring.** `render()` kullar ytor vars normal pekar bort från kameran. Utan det
+vinner den bortre ytan djuptestet och bilden visar skalets insida genom varje öppen kant, vilket
+ser ut som utskjutande flikar på modellen. Buggen fanns i den första versionen och hittades av
+att en visare ritade `scan_head_shell.stl` på just det sättet.
+
+**Ett förbehåll:** fälten skrivs vid sista iterationen. Är flödet instationärt — vilket det ser
+ut att vara vid yaw — är bilden ett ögonblick ur svängningen, inte ett medelvärde. Två
+körningar av samma fall kan då visa olika bilder, och det är i sig ett besked.
 
 ## Begränsningar
 - Kroppen är byggd av ellipsoider/konvexa skal – ger rätt volym/siluett, inte veck i löst tyg

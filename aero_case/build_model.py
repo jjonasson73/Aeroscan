@@ -70,7 +70,7 @@ YAW_DEG = 0.0
 #
 #   style='round'  kort rund hjälm (väg/aero-väg), längden från length_mm
 #   style='tt'     längden ur landmärkena, som tidigare
-HELMET = dict(style='round', length_mm=280.0, width_mm=190.0, height_mm=165.0)
+HELMET = dict(style='round', length_mm=280.0, width_mm=205.0, height_mm=165.0)
 ANKLE_OFFSET = (-70.0, 120.0, 95.0)    # ankle relative to the pedal spindle (x, |y|, z)
 KNEE_TARGET_DEG = 145.0                # knee at bottom dead centre; fit window is 140-150
 BODY_DENSITY = 1010.0                  # kg/m3
@@ -256,8 +256,19 @@ def rider(pose, g=1.0):
     # Byggs som ett konvext skal mellan halsroten och de två axelkulorna, alltså lokalt. Att i
     # stället utvidga bålens hull upp till halsroten hade gett en rak ramp över hela ryggen och
     # ändrat kroppsvolymen.
+    # Kappmuskelns framkant slutade vid halsroten, 38 mm bakom hjälmens bakre spets. Det
+    # lämnade en lokal grop i siluetten -- ytan föll 134 mm på 60 mm bakom hjässan och steg
+    # sedan tillbaka till -97. En konkav grop, alltså samma sorts defekt som hålet på 342 mm,
+    # bara mindre. Den foto-genererade modellen har ingen: dess siluett faller monotont från
+    # hjässan ut över ryggen.
+    #
+    # NACKE fyller glappet framåt-uppåt mot hjälmens underkant. Den är avsiktligt liten: målet
+    # är att ta bort den lokala gropen, INTE att matcha skanningens absoluta profil. Skanningens
+    # ryttare har plattare rygg, så dess rygghöjd är en poseskillnad och inte ett fel här.
     neck_base = sh + np.array([-40.0, 0.0, 20.0])
+    nape = sh + np.array([20.0, 0.0, 30.0])
     trap = hull(ellipsoid(neck_base + [0, 0, 10], [75, 70*g, 55*g]),
+                ellipsoid(nape, [90, 60*g, 54*g]),
                 ellipsoid(sh + [0, 120*g, -10], [70, 55*g, 55*g]),
                 ellipsoid(sh + [0, -120*g, -10], [70, 55*g, 55*g]))
     body = [torso, head, neck, trap, ellipsoid(hands + [-15, 0, -5], [65, 55*g, 55*g])]
