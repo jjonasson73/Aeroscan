@@ -866,6 +866,45 @@ uppblåsningen 1.28.
 
 Se `docs/scan/05-nacke-efter.png`.
 
+### Oavsiktlig men avgörande: 10° är stabilt, 0° är inte konvergerat (2026-09-26)
+
+Run 36224931538 kördes för fältbildernas skull, `[0,10]`, 1500 iterationer, commit 2ebb5ae.
+`build_model.py` är **oförändrad** sedan 70e21da, så geometrin är identisk med körningen dagen
+före. Enda skillnaden är iterationstalet. Det gör paret till ett rent experiment på numeriken.
+
+| | 2500 iter | 1500 iter | skillnad |
+|---|---|---|---|
+| 0° base | 0.1923 | 0.1952 | **+0.0029** |
+| 0° tuned | 0.1897 | 0.1889 | −0.0008 |
+| **0° ΔCdA** | **−0.0026** | **−0.0063** | **0.0037** |
+| 10° base | 0.1899 | 0.1899 | **0.0000** |
+| 10° tuned | 0.1928 | 0.1929 | 0.0001 |
+| **10° ΔCdA** | **+0.0030** | **+0.0030** | **0.0000** |
+
+**10-graderspunkten reproducerar på fjärde decimalen** mellan 1500 och 2500 iterationer. Den är
+konvergerad, och de extra tusen iterationerna ändrade ingenting.
+
+**0-graderspunkten gör det inte.** Deltat rör sig 0.0037, fem gånger replikspridningen, och
+`base` ensam flyttar 0.0029. Vid 1500 iterationer driver 0°-fallet fortfarande.
+
+Det vänder på antagandet som styrde de senaste dagarnas arbete. Jag valde 10° som
+diagnosvinkel eftersom dess tecken bytt tre gånger och jag läste det som instabilitet. Tecknet
+bytte mellan **geometriversioner**, inte mellan körningar. Punkten är numeriskt stenhård och
+extremt geometrikänslig — vilket är två helt olika problem.
+
+Konsekvenser:
+
+- Slutsatsen att deltat inte är konvergerat med avseende på geometridetalj **står kvar**, och
+  får nu stöd från andra hållet: samma geometri ger samma svar på fjärde decimalen, så när
+  svaret ändå flyttar sig är det geometrin.
+- Alla 0°-siffror från körningar med **1500 iterationer är underiterererade** och ska inte
+  jämföras med 2500-iterationskörningen. Det gäller replikerna, kappmuskelkörningen och den här.
+- CdA_eff-tabellen i den här körningen vilar på ett underiterererat 0° och ska inte läsas som
+  ett resultat.
+
+Minsta iterationstal för 0° är alltså **över 1500**. Om det räcker med 2500 är inte visat — det
+kräver ett tredje steg, exempelvis 3500, för att se om 0° då står still.
+
 ### Fältbilder: `tools/plot_fields.py`
 
 En CdA-siffra säger att något är fel men aldrig var. När deltat inte är stabilt är ytfälten
