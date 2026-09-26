@@ -1107,3 +1107,80 @@ körningar av samma fall kan då visa olika bilder, och det är i sig ett besked
 - **Frontvyns skalning finns inte i koden.** Kroppsbredderna (95 mm halv hjälmbredd, 165/172 mm
   bål osv.) är hårdkodade konstanter utan spårbarhet till frontfotot, och `overlay.py` validerar
   bara sidovyn. Byter man frontfoto uppdateras ingenting automatiskt.
+
+### Nätstudien på den nya geometrin: marginalen är borta, men inte av det skäl jag trodde (2026-09-26)
+
+Run 36250629494, `coarse`, `[0,10]`, 1500 iterationer, commit 85805db. Alla fyra jobb gröna,
+ingen driftflagga. `build_model.py`, `pose.py` och `configure_case.sh` är **bitidentiska** med
+2ebb5ae, som kördes på `medium` med samma iterationstal — bara efterbehandlingsverktyg skiljer
+commiterna. Nätnivån är alltså den enda variabeln.
+
+| | coarse | medium | skift |
+|---|---|---|---|
+| 0° base | 0.2079 ± 0.0005 | 0.1952 | −0.0127 |
+| 0° tuned | 0.2079 ± 0.0009 | 0.1889 | −0.0190 |
+| **0° ΔCdA** | **+0.0001** ⚠ | **−0.0063** | **0.0063** |
+| 10° base | 0.2125 ± 0.0004 | 0.1899 | −0.0226 |
+| 10° tuned | 0.2039 ± 0.0008 | 0.1929 | −0.0110 |
+| **10° ΔCdA** | **−0.0085** | **+0.0030** | **0.0116** |
+
+Coarse ligger 0.011–0.023 högre i absolut CdA. Det är väntat och ointressant — grova nät
+överskattar drag. Det som betyder något är att **felet inte är lika stort för base och tuned**:
+vid 10° flyttar base 0.0226 och tuned 0.0110 när nätet förfinas. Det är differensen, 0.0116,
+som slår rakt in i deltat och vänder dess tecken.
+
+#### Min tröskel var satt på fel par
+
+Jag skrev före körningen att om ΔCdA rör sig mer än ~0.0010 mellan coarse och medium är deltat
+inte nätupplöst. **Den tröskeln var felaktigt formulerad, och att tillämpa den rakt av hade gett
+en dramatisk slutsats som data inte bär.** README:s egen nätstudie längre upp visar nämligen att
+coarse *redan* var underkänd vid yaw: på den gamla geometrin gav coarse +0.0058 mot medium
++0.0123, en faktor två fel. Att coarse avviker från medium är alltså inte nytt — det var känt,
+och det var därför `medium` valdes.
+
+Det den här körningen faktiskt visar är något smalare:
+
+- **Coarse är fortfarande oanvändbar vid yaw.** Bekräftar det kända.
+- **Avvikelsen har vuxit från en faktor två till ett teckenbyte** — inte för att nätkänsligheten
+  ökat, utan för att *signalen krympt*. Coarse→medium rörde deltat 0.0065 på den gamla
+  geometrin och 0.0116 nu, samma storleksordning. Men deltat självt gick från +0.0123 till
+  +0.0030.
+
+#### Vad som därmed INTE är visat
+
+Frågan som avgör om siffran duger är **medium mot fine**, inte coarse mot medium. Den
+jämförelsen finns bara på den gamla geometrin, där skillnaden var 0.0014 — 11 % av deltat, väl
+inom go/no-go-kriteriets 20 %. Ett fel av samma absoluta storlek mot dagens signal på 0.0030
+skulle vara **47 %**.
+
+Så marginalen har kollapsat från 11 % till uppskattningsvis ~47 %, men det är en extrapolering
+från gammal geometri, inte en mätning. **Om medium är nätkonvergerat för den nya geometrin är
+inte visat.** Det kräver medium↔fine på nuvarande geometri, vilket inte är kört.
+
+#### Rangordningen av felkällor, som är det som styr nästa steg
+
+Allt vid 10°, som är den enda vinkeln som är iterationskonvergerad:
+
+| källa | flyttar ΔCdA | mätt på |
+|---|---|---|
+| repliker, identisk geometri | 0.0003 | medium |
+| 1500 → 2500 iterationer | 0.0000 | medium |
+| nät, medium → fine | ~0.0014 | gammal geometri |
+| kappmuskeln, 342 mm hål | 0.0040 | medium |
+| **nape, 42 mm skreva** | **0.0074** | medium |
+| *(nät, coarse → medium)* | *0.0116* | *underkänd nivå* |
+
+**Geometridetalj är fortfarande den största posten**, en faktor 3–5 över nätet vid medium. Den
+slutsatsen från kappmuskel- och nape-körningarna står kvar, och den här körningen rör den inte.
+
+Men notera vad tabellen säger om signalen: ΔCdA vid 10° är 0.0030, alltså **mindre än
+geometrikänsligheten på 0.0040–0.0074**. Positionsdeltat vid 10 grader går i dagsläget inte att
+upplösa alls — det som ska mätas är mindre än osäkerheten i det som matar mätningen.
+
+Det är ett argument *för* bättre geometri, inte emot. Men det betyder också att ingen
+nätförfining räddar siffran så länge geometrin är en parametrisk approximation, och att en
+skanner inte heller ger ett svar förrän medium↔fine är körd på den nya geometrin så att man vet
+vilken av de två posterna som faktiskt binder.
+
+Nästa experiment är därför **medium↔fine på nuvarande geometri vid 10°** — två jobb, inte åtta.
+Innan den är körd är både "nätet räcker" och "nätet räcker inte" obelagda påståenden.

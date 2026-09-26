@@ -21,7 +21,7 @@ import sys, os, glob, json, argparse
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from plot_fields import read_vtp
+from vtp import read_vtp
 
 PARTS = ('rider', 'bike', 'wheel_rear', 'wheel_front')
 
