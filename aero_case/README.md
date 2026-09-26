@@ -1281,3 +1281,99 @@ medium-körningen, så ingen jämförelse är korrupt.
 **Lämnas orörd med flit.** Att sätta processantalet ändrar MPI-reduktionsordningen och därmed
 sista decimalerna, vilket skulle bryta jämförbarheten mot medium-körningen som hela
 nätstudien vilar på. Fixas när ingen aktiv jämförelse hänger på den.
+
+### Utfallet: 0° är nätkonvergerat, 10° är det inte — och medium är avvikaren (2026-09-26)
+
+Run 36255126139, `surf`, `[0,10]`, 1500 iterationer, commit 6d4a3b3. Alla fem jobb gröna, ingen
+driftflagga. Fältuppdelningen kom med den här gången, så PIL-fixen håller.
+
+| yaw | base CdA ± svängning | tuned CdA ± svängning | ΔCdA |
+|---|---|---|---|
+| +0 | 0.1965 ± 0.0025 | 0.1902 ± 0.0021 | **−0.0063** ± 0.0032 |
+| +10 | 0.1974 ± 0.0014 | 0.1889 ± 0.0018 | **−0.0084** ± 0.0023 |
+
+Kontrollraderna är bra: vid 0° ligger bike på +0.0007 och wheels på −0.0003, vid 10° −0.0012 och
+−0.0009. Jämfört med coarse-körningens −0.0041 på bike har näten inte drivit isär.
+
+#### Tre nivåer, två helt olika svar
+
+| yaw | coarse (4 5) | medium (5 6) | surf (6 6) | spann |
+|---|---|---|---|---|
+| **0°** | +0.0001 ⚠ | **−0.0063** | **−0.0063** | 0.0063 |
+| **10°** | **−0.0085** | **+0.0030** | **−0.0084** | 0.0116 |
+
+**Vid 0° är deltat nätkonvergerat.** Medium och surf ger −0.0063 båda, identiskt på fjärde
+decimalen. Ytförfiningen flyttade det **0.0000**. Coarse ligger utanför, men dess 0°-delta var
+flaggat som mindre än svängningen och var aldrig ett resultat. Det här är första gången i
+projektet ett delta står still mot en nätändring.
+
+**Vid 10° är det inte konvergerat, och värre: det är icke-monotont.** −0.0085 → +0.0030 →
+−0.0084 när nätet förfinas i tre steg. En konvergerande följd går monotont mot ett värde; den här
+går ner, upp, ner. Då går det inte ens att extrapolera fram ett svar.
+
+Tröskeln satt före körningen var att en rörelse över 0.0010 vid 10° betyder att ytupplösningen
+binder. Rörelsen är **0.0115**. Tröskeln är uppfylld med stor marginal.
+
+Men fyndet är rikare än tröskeln förutsåg: **coarse och surf är överens om −0.0085, och medium
+står ensam på +0.0030.** Två av tre nivåer säger att den tunade positionen *vinner* vid 10
+grader. Det är medium som säger att den förlorar — och medium är den körning hela slutsatsen
+"positionen förlorar i sidvind" vilade på.
+
+#### Mekanismen pekar mot att medium är felet, inte att allt är brus
+
+Bandet 1050–1200 mm, övre ryggen, vid 10 grader:
+
+| nivå | base | tuned | Δ |
+|---|---|---|---|
+| medium | 0.0257 | 0.0309 | **+0.0052** |
+| surf | 0.0258 | 0.0267 | **+0.0009** |
+
+**`base` rörde sig +0.0001. `tuned` rörde sig −0.0042.** Ytförfiningen lämnade baseline i stort
+sett oberörd och tog bort fyra femtedelar av det positiva bidraget i den tunade positionen. Det
+var precis det bidraget som vände tecknet på medium.
+
+Det är fysikaliskt rimligt: den tunade positionen är lägre och flackare, så dess övre rygg möter
+flödet mer strykande. En flack yta i strykande flöde är den sortens region medium lägger på nivå
+5 och där upplösningen betyder mest. Hypotesen är därför att **medium underupplöste den tunade
+positionens övre rygg vid yaw och producerade ett falskt positivt bidrag där.**
+
+Det är en hypotes med stöd, inte ett fastställt faktum. Tre punkter kan inte skilja "medium är
+avvikande" från "alla tre är brus". Det som skulle avgöra det är en replik av medium vid 10° med
+störd nätning — reproducerar inte +0.0030 var medium anomal.
+
+#### Var projektet står: ingen vinkel har båda egenskaperna
+
+| vinkel | iterationskonvergerad | nätkonvergerad (yta) |
+|---|---|---|
+| **0°** | **NEJ** — rör sig 0.0037 mellan 1500 och 2500 | **JA** — 0.0000 medium→surf |
+| **10°** | **JA** — 0.0000 mellan 1500 och 2500 | **NEJ** — 0.0115, icke-monotont |
+
+Det är en obekväm symmetri. Varje vinkel har den egenskap den andra saknar, och inget tal i
+projektet har ännu båda.
+
+**Billigaste vägen till ett fullt kvalificerat tal: `surf` vid 0° med 2500 iterationer, två
+jobb.** 0° är redan nätkonvergerat, så det som fattas är iterationerna. Körtiden nedan säger att
+det ryms.
+
+#### Min tidsuppskattning var för pessimistisk
+
+| | mesh+solve | mot förutsagt |
+|---|---|---|
+| medium | 84–95 min, snitt 90 | — |
+| surf | 102–138 min, snitt 121 | **1.35×**, jag förutsåg 2.3× |
+
+Cellantalet går inte att verifiera — artefakten ligger på Azure blob-lagring som proxyn
+policyblockerar, och loggar serveras inte för pågående jobb (404), så förvarningen jag planerade
+mitt i körningen var aldrig möjlig. Men faktorn 1.35 mot förutsagda 2.3 betyder att nätet växte
+klart mindre än de ~3.2 M celler jag räknade fram.
+
+**Konsekvensen är att (6 7) sannolikt hade rymts.** Min uppskattning på ~380 min byggde på samma
+överskattning. Ett riktigt nivå-7-test på ytan är alltså inte utom räckhåll för GitHubs löpare,
+tvärtemot vad jag skrev innan körningen. Det är den jämförelse som skulle stänga 10-gradersfrågan.
+
+#### Vad som inte ska läsas ur den här körningen
+
+CdA_eff-tabellen säger nu att den tunade positionen vinner vid varje vindstyrka, −3.2 % till
+−4.1 %. **Läs den inte som ett resultat.** Den vilar på 10-graderspunkten, som är den punkt som
+just visats vara icke-konvergerad, och på ett 0° som är underiterererat. Att den ser trevlig ut
+är inget argument för den.
