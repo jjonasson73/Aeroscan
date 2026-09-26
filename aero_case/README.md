@@ -969,6 +969,35 @@ visar skillnaden men inte dramatiskt — siffrorna är det starkare beviset, bil
 underiterererade vid 1500 iterationer, vilket gör 0°-kolumnerna ovan mindre säkra än
 10°-kolumnerna.
 
+### Uppdelningen räknas nu i körningen: `tools/field_report.py`
+
+Fältbilderna kräver att artefakten laddas ner, och den vägen är blockerad härifrån. Men
+**siffrorna var det som gav mekanismen** — bilderna stödde dem. Därför räknas uppdelningen nu
+i `verdict`-jobbet och skrivs till **loggen**, som går att läsa via API:et.
+
+Varje körning ger alltså automatiskt:
+
+- CdA-bidrag per del, integrerat ur ytfälten, med summan som kontroll mot forceCoeffs
+- ryttarens bidrag per höjdband, base mot tuned, med Δ per band
+- en markering på band som flyttar mer än 0.0015 m²
+
+Text kostar ingenting i git, till skillnad från PNG:er som inte deltakomprimeras. Bilderna görs
+på begäran med `plot_fields.py` när någon skickar över artefakten.
+
+**Två teckenkonventioner, båda verifierade mot integralen och inte mot magkänslan:**
+
+| | |
+|---|---|
+| `wallShearStress` | returneras med motsatt tecken mot strömningen → vänds |
+| ytnormalerna i `.vtp` | pekar inåt → tryckbidraget får plustecken |
+
+Kontrollen är att summan reproducerar `forceCoeffs`. På run 36224931538 stämmer den till
+0.5–1 % i alla fyra fallen. Gör den inte det är något antagande fel, och verktyget ska då säga
+till i stället för att tiga.
+
+`verdict` installerar bara `numpy` och `trimesh`; `meshio` importeras lat och behövs bara för
+`.vtk`, medan OpenFOAM skriver `.vtp`.
+
 ### Fältbilder: `tools/plot_fields.py`
 
 En CdA-siffra säger att något är fel men aldrig var. När deltat inte är stabilt är ytfälten

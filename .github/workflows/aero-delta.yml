@@ -130,11 +130,17 @@ jobs:
         with: { path: aero_case/results }
       - name: Delta report
         run: |
-          pip install --quiet numpy
+          pip install --quiet numpy trimesh
           # tee: utslaget måste synas i jobbloggen också, inte bara i sammanfattningen -
           # sammanfattningen går inte att läsa via API:et.
           {
             echo "## ${{ inputs.fit }} · ${{ inputs.mesh }} · ${{ inputs.speed }} m/s · repliker ${{ inputs.replicates }}"
             echo
             python3 tools/delta_report.py results 150 replik
+            echo
+            # Fältuppdelningen skrivs till LOGGEN, inte som bild. Siffrorna var det som
+            # gav mekanismen bakom den instabila 10-graderspunkten, de kostar ingenting
+            # i git, och de gar att lasa via API:et. Faller den ska rapporten anda sta kvar.
+            python3 tools/field_report.py results --uinf "${{ inputs.speed }}" \
+              || echo '*Faltuppdelningen misslyckades - se loggen.*'
           } | tee -a $GITHUB_STEP_SUMMARY

@@ -157,7 +157,7 @@ jobs:
         with: { path: aero_case/results }
       - name: Yaw report
         run: |
-          pip install --quiet numpy
+          pip install --quiet numpy trimesh
           # tee: utslaget måste synas i jobbloggen också - sammanfattningen går inte att
           # läsa via API:et.
           {
@@ -166,4 +166,10 @@ jobs:
             # 400 iterationers fönster, inte 150. Vid yaw svänger kraften och ett kort
             # fönster ger ett stickprov ur svängningen i stället för ett medelvärde.
             python3 tools/yaw_report.py results 400 "${{ inputs.ride_speed_kmh }}"
+            echo
+            # Fältuppdelningen skrivs till LOGGEN, inte som bild. Siffrorna var det som
+            # gav mekanismen bakom den instabila 10-graderspunkten, de kostar ingenting
+            # i git, och de gar att lasa via API:et. Faller den ska rapporten anda sta kvar.
+            python3 tools/field_report.py results --uinf "${{ inputs.speed }}" \
+              || echo '*Faltuppdelningen misslyckades - se loggen.*'
           } | tee -a $GITHUB_STEP_SUMMARY

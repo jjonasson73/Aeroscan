@@ -16,7 +16,7 @@ ett tryckfält blir de kanterna lätt lästa som fysik.
   python3 tools/plot_fields.py <fältkatalog> <utkatalog> [--uinf 12.5] [--tag namn]
 """
 import sys, os, glob, argparse
-import numpy as np, meshio, trimesh
+import numpy as np, trimesh
 from PIL import Image, ImageDraw
 
 SURFACE   = (252, 252, 251)
@@ -99,6 +99,7 @@ def read_surface(path):
     """VTK -> (trimesh, {fältnamn: värde per triangel})."""
     if path.endswith('.vtp'):
         return read_vtp(path)
+    import meshio        # bara .vtk behöver den; verdict-jobbet slipper installera
     m = meshio.read(path)
     pts = m.points.astype(np.float64)
     tris, src = [], []          # src: index i den ursprungliga cellistan
