@@ -42,7 +42,9 @@ def case_contrib(d, uinf):
             continue
         m, fld = read_vtp(f)
         A, n = m.area_faces, m.face_normals
-        v = (np.asarray(fld['p']) * (n @ dd) * A) / q
+        # Normalerna pekar UT (read_vtp vänder vindningen), så trycket verkar
+        # längs -n: motståndet blir -p*(n.dragDir)*A.
+        v = -(np.asarray(fld['p']) * (n @ dd) * A) / q
         if 'wallShearStress' in fld:
             v = v - ((np.asarray(fld['wallShearStress']) @ dd) * A) / q
         out[part] = (m.triangles_center, v)

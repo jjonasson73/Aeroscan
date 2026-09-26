@@ -83,6 +83,14 @@ def read_vtp(path):
         for j in range(1, len(poly) - 1):          # triangelfläkt
             tris.append((poly[0], poly[j], poly[j + 1])); src.append(i)
     F = np.asarray(tris, np.int64); S = np.asarray(src, np.int64)
+    # OpenFOAMs .vtp-patchar kommer med vindning som ger INÅTPEKANDE normaler.
+    # Kontrollerat med divergenssatsen: signerad volym blir negativ som den kommer.
+    # Lämnas den så inverteras ljussättningen i varje rendering (ovansidan skuggas,
+    # undersidan lyser) och tryckintegralen får fel tecken. Vänds här, en gång, i
+    # stället för att kompenseras på varje användningsställe.
+    v0, v1, v2 = pts[F[:, 0]], pts[F[:, 1]], pts[F[:, 2]]
+    if np.einsum('ij,ij->i', v0, np.cross(v1 - v0, v2 - v0)).sum() < 0:
+        F = F[:, [0, 2, 1]]
     fields = {}
     cd = piece.find('CellData')
     if cd is not None:

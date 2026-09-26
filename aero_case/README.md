@@ -1032,8 +1032,17 @@ på begäran med `plot_fields.py` när någon skickar över artefakten.
 
 | | |
 |---|---|
-| `wallShearStress` | returneras med motsatt tecken mot strömningen → vänds |
-| ytnormalerna i `.vtp` | pekar inåt → tryckbidraget får plustecken |
+| `wallShearStress` | returneras med motsatt tecken mot strömningen → vänds i `plot_fields` |
+| vindningen i `.vtp` | ger inåtpekande normaler → **vänds i `read_vtp`**, en gång |
+
+Vindningen hanterades först genom att kompensera tecknet där den användes. Det höll bara tills
+samma mesh renderades: med inåtpekande normaler inverteras ljussättningen, så ovansidan
+skuggas och undersidan lyser — en cyklist belyst underifrån ser upp och ner ut. Användaren såg
+det i 3D-vyn.
+
+Nu vänds vindningen i `read_vtp`, verifierat med divergenssatsen (signerad volym ska vara
+positiv: −0.0716 → +0.0710 m³). CdA-summorna är oförändrade; fixen rör orienteringen, inte
+fysiken.
 
 Kontrollen är att summan reproducerar `forceCoeffs`. På run 36224931538 stämmer den till
 0.5–1 % i alla fyra fallen. Gör den inte det är något antagande fel, och verktyget ska då säga
