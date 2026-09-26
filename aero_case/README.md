@@ -1230,3 +1230,54 @@ faktor 2.4 per ytnivå. En nivå till landar grovt på 3.5–5 h, inom 6-timmars
 marginal som inte är stor.
 
 Innan punkt 2 är körd är både "nätet räcker" och "nätet räcker inte" obelagda påståenden.
+
+### Ytnivån över medium: `surf`, och varför den blev ett halvsteg (2026-09-26)
+
+Tillagd som nätnivå `surf` i `tools/configure_case.sh`: **mediums boxar, ryttarens yta en nivå
+finare.** Enda variabeln mot medium är ryttarens ytupplösning, vilket är villkoret för att
+siffran ska gå att tolka.
+
+Bara ryttaren, eftersom den är den enda delen som skiljer base från tuned — det är dess
+upplösning som kan flytta deltat. Cykel och hjul är identisk geometri och deras rader i
+uppdelningen fungerar som kontroll.
+
+**Ett fullt steg till (6 7) ryms inte.** Räknat på `log.snappyHexMesh` från medium: ytbandet i
+castellated-nätet är 168 647 celler på nivå 5 och 227 400 på nivå 6, och ryttaren är 51 % av
+ytarean (1.714 m² av 3.374 m²). En nivå upp åttafaldigar de berörda cellerna:
+
+| variant | castellated | slutnät | grov solvtid | mot taket 355 min |
+|---|---|---|---|---|
+| medium, som referens | 461 k | 1.40 M | 84–95 min (mätt) | — |
+| rider (6 6) | 1.06 M | ~3.2 M | ~220 min | ryms |
+| rider (6 7) | 1.87 M | ~5.7 M | ~380 min | **spränger** |
+| alla fyra (6 7) | 3.23 M | ~9.8 M | — | spränger grovt |
+
+En timeout förlorar hela jobbet, så (6 6) är valt: det lyfter *minnivån* från 5 till 6 så att
+ytan blir jämnt upplöst i stället för krökningsstyrd. Kantförfiningen låg redan på 6 och är
+oförändrad.
+
+**Det träffar dessutom rätt ställe.** Fältuppdelningen lokaliserade teckenvändningen till bandet
+1050–1200 mm, alltså övre ryggen och skuldrorna — en bred, flack yta, som är precis den sorts
+region medium lägger på nivå 5 och som (6 6) lyfter. De krökta partierna låg redan på 6.
+
+**Asymmetrin i vad utfallet bevisar, satt före körningen:**
+
+- **Flyttar ΔCdA sig** → ytupplösningen binder. Fullgott resultat, och då är nätet flaskhalsen
+  före geometrin.
+- **Står ΔCdA still** → svagare bevis än det ser ut. De krökta partierna låg på nivå 6 i båda
+  fallen, så ett nivå-7-test återstår och kräver en större maskin än GitHubs löpare. Det får
+  läsas som "ingen indikation på ytberoende", inte som "ytan är konvergerad".
+
+Tröskeln är densamma som förut, och den gäller nu rätt par: **rör sig ΔCdA vid 10° mer än
+~0.0010 är ytan inte upplöst.**
+
+#### Sidofynd: `$NP` är odefinierad i aero-yaw.yml
+
+`configure_case.sh` anropas med `"$NP"` men variabeln sätts aldrig i det workflowet, så
+`foamDictionary -entry numberOfSubdomains -set ""` blir en no-op. Alla körningar har därmed
+använt 4 processorer (`nProcs : 4` i varje logg), konsekvent i både coarse- och
+medium-körningen, så ingen jämförelse är korrupt.
+
+**Lämnas orörd med flit.** Att sätta processantalet ändrar MPI-reduktionsordningen och därmed
+sista decimalerna, vilket skulle bryta jämförbarheten mot medium-körningen som hela
+nätstudien vilar på. Fixas när ingen aktiv jämförelse hänger på den.

@@ -3,7 +3,7 @@
 # workflows cannot drift apart -- a delta comparison is only meaningful if both sides were
 # set up by exactly the same code.
 #
-#   tools/configure_case.sh <quick|coarse|medium|fine> <speed> <max_iterations> <nprocs> [fixed] [wide]
+#   tools/configure_case.sh <quick|coarse|medium|surf|fine> <speed> <max_iterations> <nprocs> [fixed] [wide]
 #
 # A fifth argument "fixed" disables runTimeControl so the run goes to exactly max_iterations.
 # A delta comparison needs both positions equally converged; letting the convergence monitor
@@ -105,6 +105,34 @@ case "$MESH" in
   medium)
     # fine's surface resolution with coarse's refinement boxes: coarse vs medium then differ
     # ONLY in how finely the body is resolved, which is what a refinement study needs.
+    foamDictionary -entry castellatedMeshControls/refinementRegions/nearBox/levels -set "((1E15 3))" $S
+    foamDictionary -entry castellatedMeshControls/refinementRegions/wakeBox/levels -set "((1E15 2))" $S ;;
+  surf)
+    # En ytnivå OVANFÖR medium, och bara på ryttaren. Den enda jämförelsen som kan visa
+    # ytkonvergens: coarse<->medium jämför underifrån och kan bara visa att medium är bättre
+    # än coarse, aldrig att medium räcker. medium<->fine ändrar bara boxarna.
+    #
+    # Boxarna hålls därför på mediums värden. Skillnaden mot medium är ENBART ryttarens
+    # ytupplösning, vilket är villkoret för att siffran ska gå att tolka.
+    #
+    # Bara ryttaren, eftersom den är den enda delen som skiljer mellan base och tuned -- det
+    # är dess upplösning som kan flytta deltat. Cykel och hjul är identisk geometri och deras
+    # rader i uppdelningen är kontrollen.
+    #
+    # (6 6), inte (6 7). Ett fullt steg till (6 7) ger enligt cellräkningen nedan ~5.7 M
+    # celler mot mediums 1.40 M, alltså omkring 380 min mot jobbets tak på 355 -- och en
+    # timeout förlorar hela jobbet. (6 6) lyfter minnivån från 5 till 6 så att ytan blir
+    # jämnt upplöst i stället för att kröknings- styras: ~3.2 M celler och ~220 min.
+    #
+    # Räkningen, från log.snappyHexMesh på medium: ytbandet i castellated är 168 647 celler
+    # på nivå 5 och 227 400 på nivå 6. Ryttaren är 51 % av ytarean. En nivå upp åttafaldigar
+    # de berörda cellerna.
+    #
+    # Asymmetrin i vad utfallet bevisar är viktig: flyttar deltat sig så BINDER
+    # ytupplösningen, och det är ett fullgott resultat. Står det still är det svagare bevis
+    # än det ser ut -- de krökta partierna låg på nivå 6 i båda fallen, så ett nivå-7-test
+    # återstår och kräver en större maskin än GitHubs löpare.
+    foamDictionary -entry castellatedMeshControls/refinementSurfaces/rider/level -set "(6 6)" $S
     foamDictionary -entry castellatedMeshControls/refinementRegions/nearBox/levels -set "((1E15 3))" $S
     foamDictionary -entry castellatedMeshControls/refinementRegions/wakeBox/levels -set "((1E15 2))" $S ;;
   fine) : ;;   # the dictionary ships at fine

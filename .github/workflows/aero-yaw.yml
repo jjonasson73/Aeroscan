@@ -31,7 +31,9 @@ on:
       mesh:
         description: "Nätnivå"
         type: choice
-        options: [quick, coarse, medium, fine]
+        # surf = mediums boxar men ryttarens yta en nivå finare. Den enda nivån som kan
+        # visa ytkonvergens ovanifrån; se kommentaren i tools/configure_case.sh.
+        options: [quick, coarse, medium, surf, fine]
         default: medium
       max_iterations:
         default: "1500"
