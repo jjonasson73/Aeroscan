@@ -767,16 +767,31 @@ Vyerna som mätningarna nedan bygger på ligger i `docs/scan/`:
 | `02-huvudparti-rutnat.png` | huvudpartiet med mm-rutnät i x och z — den mest användbara |
 | `03-huvudholje-tre-vyer.png` | det utskurna huvudhöljet, sida/fram/ovan |
 | `04-siluettjamforelse.png` | sagittalsiluett mot den parametriska modellen, uppriktade i hjässan |
+| `06-hjalm-kapad.png` | den kapade hjälmen i tre vyer, med bakstyckesgallring |
 
 Siluettjämförelsen är svårläst eftersom poserna skiljer sig påtagligt. Läs den med skepsis.
 
-### Huvudpartiet: `geometry/scan_head_shell.stl`
+### Huvudpartiet: `geometry/scan_helmet_crop.stl`
 
-Hjälmen och huvudet är ett sammansmält skal utan söm, så hjälmen går inte att skära ut för
-sig. Det som finns incheckat är huvudpartiets ytterhölje, x < −295, z > 1232, |y| < 150,
-nedsamplat till 40 k trianglar. Referensgeometri, inte körbar.
+Hjälmen och huvudet är ett sammansmält skal **utan söm**, så hjälmen går inte att skära ut för
+sig. Två metoder provade, båda misslyckas:
 
-Hjälmens mått, med armarna uteslutna (x ∈ [−600, −360]):
+- **Planskärning** tar antingen med axelkrönet eller klipper hjälmens bakkant. Det finns ingen
+  plannivå som skiljer dem.
+- **Regionväxt längs ytan**, som ska stanna vid en skarp kant, rinner över 85 % av meshen redan
+  vid 18° tröskel. Skanningen har ingen skarp kant vid hjälmbrättet — ytan är slät hela vägen.
+
+Det som ligger incheckat är därför en **kapad låda**, x < −348, z > 1250, |y| < 118: vattentät,
+30 k trianglar, 241 × 236 × 125 mm. Referensgeometri, inte körbar.
+
+> **De plana ytorna i filen är mina snittplan, inte geometri.** Likaså sitter små utskjutande
+> flikar kvar i bakkanten där nacke och axel passerar snittet. Öppnas filen i en visare som
+> inte kullar baksidor ser de ut som vingar på hjälmen. Det är de inte.
+>
+> En tidigare version, `scan_head_shell.stl`, var dessutom **öppen** — snitten kapades inte —
+> så visaren ritade skalets insida genom hålen. Den filen är borttagen.
+
+Hjälmens mått, med armarna uteslutna Hjälmens mått, med armarna uteslutna (x ∈ [−600, −360]):
 
 | | längd | bredd | höjd |
 |---|---|---|---|
@@ -881,6 +896,11 @@ bandet **separationslinjen** — där väggskjuvningen byter tecken och flödet 
 
 Aldrig regnbåge. En regnbågsskala lägger falska kanter där hue:n hoppar, och i ett tryckfält
 läses de kanterna lätt som fysik. Det är den vanligaste lögnen i CFD-bilder.
+
+**Bakstyckesgallring.** `render()` kullar ytor vars normal pekar bort från kameran. Utan det
+vinner den bortre ytan djuptestet och bilden visar skalets insida genom varje öppen kant, vilket
+ser ut som utskjutande flikar på modellen. Buggen fanns i den första versionen och hittades av
+att en visare ritade `scan_head_shell.stl` på just det sättet.
 
 **Ett förbehåll:** fälten skrivs vid sista iterationen. Är flödet instationärt — vilket det ser
 ut att vara vid yaw — är bilden ett ögonblick ur svängningen, inte ett medelvärde. Två

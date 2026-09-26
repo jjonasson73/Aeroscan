@@ -82,6 +82,11 @@ def render(mesh, val, colour_fn, title, unit, fn, view='side', n=5_000_000,
            W=1000, note=None, ticks=None):
     ax = {'side': (0, 2, 1), 'top': (0, 1, 2), 'front': (1, 2, 0)}[view]
     pts, fid = trimesh.sample.sample_surface(mesh, n)
+    # Bakstyckesgallring. Utan den vinner den bortre ytan djuptestet och bilden visar
+    # insidan av skalet genom varje öppen kant -- vilket ser ut som utskjutande flikar
+    # på modellen. Kameran står vid +d, så bara ytor vars normal pekar mot den ritas.
+    keep = mesh.face_normals[fid][:, ax[2]] > 0
+    pts, fid = pts[keep], fid[keep]
     v = np.asarray(val)[fid]
     h, vv, d = pts[:, ax[0]], pts[:, ax[1]], pts[:, ax[2]]
     sh, sv = np.ptp(h), np.ptp(vv)
