@@ -48,8 +48,57 @@ def diverging(v, lim):
 def sequential(v, lo, hi):
     return _ramp(_SEQ, (v - lo) / (hi - lo + 1e-30))
 
+_VTP_DT = {'Float32': '<f4', 'Float64': '<f8', 'Int32': '<i4', 'Int64': '<i8',
+           'UInt32': '<u4', 'UInt64': '<u8', 'UInt8': 'u1', 'Int8': 'i1'}
+
+
+def _vtp_array(el, header_dt='<u8'):
+    """En DataArray ur en VTK XML-fil: base64(UInt64 antal_bytes + rådata)."""
+    import base64
+    raw = base64.b64decode(''.join(el.text.split()))
+    n = int(np.frombuffer(raw[:8], header_dt, 1)[0])
+    a = np.frombuffer(raw[8:8 + n], _VTP_DT[el.attrib['type']])
+    nc = int(el.attrib.get('NumberOfComponents', 1))
+    return a.reshape(-1, nc) if nc > 1 else a
+
+
+def read_vtp(path):
+    """VTK XML PolyData. meshio läser inte .vtp, och OpenFOAMs `surfaces` skriver
+    just .vtp med surfaceFormat vtk. Formatet är okomprimerad base64 med en
+    UInt64-längd först, alltså inget som motiverar ett hundramegabytes paket."""
+    import xml.etree.ElementTree as ET
+    root = ET.parse(path).getroot()
+    if root.attrib.get('compressor'):
+        raise SystemExit(f'{path}: komprimerad VTP stöds inte')
+    hdr = _VTP_DT[root.attrib.get('header_type', 'UInt64')]
+    piece = root.find('.//Piece')
+    pts = _vtp_array(piece.find('Points/DataArray'), hdr).astype(np.float64)
+    polys = piece.find('Polys')
+    conn = _vtp_array([d for d in polys if d.attrib['Name'] == 'connectivity'][0], hdr)
+    offs = _vtp_array([d for d in polys if d.attrib['Name'] == 'offsets'][0], hdr)
+    starts = np.concatenate(([0], offs[:-1]))
+    tris, src = [], []
+    for i, (a, b) in enumerate(zip(starts, offs)):
+        poly = conn[a:b]
+        for j in range(1, len(poly) - 1):          # triangelfläkt
+            tris.append((poly[0], poly[j], poly[j + 1])); src.append(i)
+    F = np.asarray(tris, np.int64); S = np.asarray(src, np.int64)
+    fields = {}
+    cd = piece.find('CellData')
+    if cd is not None:
+        for d in cd:
+            fields[d.attrib['Name']] = _vtp_array(d, hdr)[S]
+    pd = piece.find('PointData')
+    if pd is not None:
+        for d in pd:
+            fields[d.attrib['Name']] = _vtp_array(d, hdr)[F].mean(axis=1)
+    return trimesh.Trimesh(vertices=pts, faces=F, process=False), fields
+
+
 def read_surface(path):
     """VTK -> (trimesh, {fältnamn: värde per triangel})."""
+    if path.endswith('.vtp'):
+        return read_vtp(path)
     m = meshio.read(path)
     pts = m.points.astype(np.float64)
     tris, src = [], []          # src: index i den ursprungliga cellistan
@@ -148,8 +197,8 @@ def load_case(d):
         tdirs = sorted(glob.glob(os.path.join(d, 'diagSurfaces', '*'))) or [d]
     t = tdirs[-1]
     parts = {}
-    for f in sorted(glob.glob(os.path.join(t, 's_*.vtk')) + glob.glob(os.path.join(t, '*.vtk'))):
-        name = os.path.basename(f).replace('.vtk', '').removeprefix('s_')
+    for f in sorted(sorted(glob.glob(os.path.join(t, '*.vtp')) + glob.glob(os.path.join(t, '*.vtk')))):
+        name = os.path.basename(f).rsplit('.', 1)[0].removeprefix('s_')
         try:
             parts[name] = read_surface(f)
         except Exception as e:
@@ -196,11 +245,18 @@ def main():
                            os.path.join(a.out, 'tau_mag_side.png'),
                            note='ljust = lag skjuvning, alltso avlost eller stillastaende flode',
                            ticks=tick(0, hi)))
-        tx = w[:, 0]; tl = float(np.percentile(np.abs(tx), 99))
+        # TECKENKONVENTION. OpenFOAMs wallShearStress returnerar spänningen med
+        # MOTSATT tecken mot strömningsriktningen. Kontrollerat mot integralen:
+        # summan av tau_x*dA över alla patchar blir -0.0111 m^2 i råa värden, och
+        # friktionsmotstånd måste vara positivt i färdriktningen. Vänt tecken ger
+        # +0.0111, alltså 5.8 % av total CdA, vilket är rimligt för en trubbig kropp.
+        # Utan den här vändningen läses bilden bakvänt: allt attached flöde såg ut
+        # som backströmning.
+        tx = -w[:, 0]; tl = float(np.percentile(np.abs(tx), 99))
         outs.append(render(tri, tx, lambda v: diverging(v, tl),
                            f'tau_w,x  ·  {tg}  ·  det gra bandet ar separationslinjen', 'm2/s2',
                            os.path.join(a.out, 'tau_x_side.png'),
-                           note='blatt = backstromning (tau_x < 0), rott = medstroms',
+                           note='rott = medstroms (attached), BLATT = backstromning alltsa AVLOST',
                            ticks={'map': lambda t: (t*2-1)*tl,
                                   'marks': [(0, f'{-tl:+.3f}'), (0.5, '0'), (1, f'{tl:+.3f}')]}))
     for o in outs: print(f"  {o}")

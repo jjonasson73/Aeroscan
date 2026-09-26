@@ -905,6 +905,70 @@ Konsekvenser:
 Minsta iterationstal för 0° är alltså **över 1500**. Om det räcker med 2500 är inte visat — det
 kräver ett tredje steg, exempelvis 3500, för att se om 0° då står still.
 
+### Fältbilderna svarar: deltat är en korsning, inte ett hopp (2026-09-26)
+
+Run 36224931538 med fältdata. Två valideringar först, eftersom en fältbild är värdelös om
+skalningen är fel:
+
+- **Stagnationstrycket ger Cp = +1.014.** Läroboksfacit är exakt 1.0. Trycket och skalningen
+  stämmer.
+- **Ytintegralen reproducerar rapportens CdA.** Summan av tryck- och friktionsbidrag per
+  triangel ger 0.1916 mot rapporterade 0.1899 vid y10-base, alltså 0.9 % fel. Uppdelningen
+  nedan går därför att lita på.
+
+#### Ett teckenfel, funnet av integralen
+
+OpenFOAMs `wallShearStress` returnerar spänningen med **motsatt tecken mot
+strömningsriktningen**. Med råa värden blev friktions-CdA −0.0111 m², och friktionsmotstånd
+måste vara positivt i färdriktningen. Vänt tecken ger +0.0111, vilket är **5.8 % av total CdA** —
+rimligt för en trubbig kropp.
+
+Utan den vändningen läste bilden bakvänt: allt attached flöde såg ut som backströmning.
+`tools/plot_fields.py` vänder nu tecknet och motiverar det i koden.
+
+#### Det som faktiskt hände
+
+| ryttarens CdA | 0° | 10° | ändring |
+|---|---|---|---|
+| base | 0.1275 | 0.1144 | **−0.0131** |
+| tuned | 0.1179 | **0.1179** | **0.0000** |
+
+**Den trimmade positionen är oförändrad av yaw. Basen tappar kraftigt.** Tecknet på ΔCdA vänder
+mellan 0° och 10° därför att **kurvorna korsar varandra**, inte för att någon punkt hoppar.
+
+Det förklarar hela instabiliteten. Deltat är differensen mellan en brant fallande och en platt
+kurva. Var de korsas avgör tecknet, och korsningen flyttar sig lätt när geometrin ändras.
+
+#### Och det sitter i ett enda band
+
+CdA-bidrag per höjdband över mark, se `docs/fields/01-hojdband.png`:
+
+| höjd | 0° base | 0° tuned | Δ | 10° base | 10° tuned | Δ |
+|---|---|---|---|---|---|---|
+| 600–750 | 0.0239 | 0.0212 | −0.0027 | 0.0187 | 0.0185 | −0.0002 |
+| 900–1050 | 0.0138 | 0.0167 | +0.0029 | 0.0194 | 0.0193 | −0.0001 |
+| **1050–1200** | **0.0318** | **0.0259** | **−0.0059** | **0.0257** | **0.0309** | **+0.0052** |
+| 1200–1350 | 0.0176 | 0.0149 | −0.0027 | 0.0157 | 0.0138 | −0.0019 |
+
+**Bandet 1050–1200 mm vänder ensamt.** Det är övre ryggen och axlarna, strax under
+axelleden på 1229 mm. Vid 0° är `tuned` klart bättre där, vid 10° klart sämre. Ingen annan del
+av kroppen gör något liknande.
+
+Och bandet **1200–1350 mm** är precis där `nape`-ellipsoiden lades till. Att den ändringen
+flyttade 10-graderspunkten 0.0085 är alltså inte längre förvånande — den satt mitt i en av de
+två stora termer som nästan tar ut varandra.
+
+Slutsatsen att deltat inte är konvergerat med avseende på geometridetalj står alltså kvar, men
+nu med en mekanism: **ΔCdA är en liten rest mellan stora motverkande bidrag i övre ryggen.**
+Rör man geometrin där rör sig resten oproportionerligt.
+
+Väggskjuvningen i det bandet, base mot tuned, finns i `docs/fields/02-bal-10grader.png`. Den
+visar skillnaden men inte dramatiskt — siffrorna är det starkare beviset, bilden stödjer dem.
+
+**Förbehåll:** fälten är skrivna vid sista iterationen, alltså ett ögonblick. Och 0°-fallen är
+underiterererade vid 1500 iterationer, vilket gör 0°-kolumnerna ovan mindre säkra än
+10°-kolumnerna.
+
 ### Fältbilder: `tools/plot_fields.py`
 
 En CdA-siffra säger att något är fel men aldrig var. När deltat inte är stabilt är ytfälten
