@@ -1182,5 +1182,51 @@ nätförfining räddar siffran så länge geometrin är en parametrisk approxima
 skanner inte heller ger ett svar förrän medium↔fine är körd på den nya geometrin så att man vet
 vilken av de två posterna som faktiskt binder.
 
-Nästa experiment är därför **medium↔fine på nuvarande geometri vid 10°** — två jobb, inte åtta.
-Innan den är körd är både "nätet räcker" och "nätet räcker inte" obelagda påståenden.
+#### Rättelse samma dag: medium↔fine testar inte det jag skrev att det testar
+
+Raden ovan löd först att nästa experiment är medium↔fine. Det är fel, och felet kommer av att
+jag inte läst nivådefinitionerna ordentligt. Från `tools/configure_case.sh` och
+`system/snappyHexMeshDict`:
+
+| nivå | yta | kanter | nearBox | wakeBox |
+|---|---|---|---|---|
+| coarse | (4 5) | 5 | 3 | 2 |
+| medium | (5 6) | 6 | 3 | 2 |
+| fine | (5 6) | 6 | 4 | 3 |
+
+**Coarse→medium ändrar bara ytupplösningen. Medium→fine ändrar bara vakboxarna.** Skriptets
+egen kommentar på rad 106 säger det: medium är "fine's surface resolution with coarse's
+refinement boxes", just för att coarse↔medium ska isolera kroppsupplösningen.
+
+Det betyder att den gamla nätstudiens två jämförelser mätte olika saker:
+
+- **medium↔fine = 0.0014** → *volym- och vakupplösningen* är konvergerad.
+- **coarse↔medium = 0.0065** → *ytupplösningen* är inte konvergerad, och medium är den finaste
+  ytnivån som finns.
+
+Slutsatsen "medium och fine är överens, alltså duger medium" är därför starkare formulerad än
+data bär. Att två nivåer med *identisk yta* ger samma svar visar att boxarna räcker, inte att
+ytan gör det. **Ytkonvergens är aldrig visad** — bara att medium är bättre än coarse, vilket är
+en jämförelse underifrån.
+
+Så den här körningen och den jag först föreslog svarar båda på fel fråga:
+
+| experiment | testar | status |
+|---|---|---|
+| coarse↔medium | ytan, underifrån | kört, teckenbyte |
+| medium↔fine | boxarna | mätt 0.0014 på gammal geometri |
+| **medium↔(6 7)** | **ytan, ovanifrån** | **aldrig kört, finns inte i skriptet** |
+
+Två experiment står alltså kvar, och de är inte utbytbara:
+
+1. **fine vid 10° på nuvarande geometri**, 2 jobb. Boxtermen är känd till 0.0014 från gammal
+   geometri, men mot dagens signal på 0.0030 är det 47 %. Den behöver mätas om på den nya
+   geometrin, där vaken ändrats av nape och hjälmen. Nivån är bevisat körbar.
+2. **En ny ytnivå (6 7) med mediums boxar**, 2 jobb. Den enda som kan visa ytkonvergens. Finns
+   inte i `configure_case.sh` och måste läggas till.
+
+Kostnad, mätt på de två körningarna: coarse 35–39 min, medium 84–95 min mesh+solve, alltså
+faktor 2.4 per ytnivå. En nivå till landar grovt på 3.5–5 h, inom 6-timmarsgränsen men med
+marginal som inte är stor.
+
+Innan punkt 2 är körd är både "nätet räcker" och "nätet räcker inte" obelagda påståenden.
