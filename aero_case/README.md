@@ -969,6 +969,50 @@ visar skillnaden men inte dramatiskt — siffrorna är det starkare beviset, bil
 underiterererade vid 1500 iterationer, vilket gör 0°-kolumnerna ovan mindre säkra än
 10°-kolumnerna.
 
+### Vaken: `tools/plot_wake.py`
+
+`diagSlice` sparar symmetrisnittet med `U`, `p`, `k` och `nut`. Verktyget ritar det.
+
+Riktningen visas med **LIC** — brus utsmetat längs flödet — i stället för pilar eller
+strömlinjer. Pilar kräver att man väljer en täthet, strömlinjer att man väljer startpunkter,
+och båda valen döljer det man inte råkade välja. LIC visar hela strukturen, inklusive
+återcirkulationen, utan att man bestämt var man ska titta.
+
+```
+python3 tools/plot_wake.py <fallkatalog> <ut.png> --uinf 12.5
+```
+
+**Det här är stationär RANS, alltså MEDELFLÖDET.** Virvelavlösningar syns inte — de är
+medelvärdesbildade bort. Det man ser är den stående återcirkulationsbubblan, inte en
+ögonblicksbild av virvlar. Vill man se avlösning i tiden krävs URANS eller LES.
+
+#### Andelen backströmning förutsäger INTE motståndet
+
+| fall | backströmning i snittet | lägsta Ux | ryttarens CdA |
+|---|---|---|---|
+| y0-base | 10.4 % | −9.9 m/s | 0.1275 |
+| y0-tuned | **12.3 %** | −10.1 m/s | **0.1179** |
+| y10-base | 5.7 % | −6.6 m/s | 0.1144 |
+| y10-tuned | **4.1 %** | −6.7 m/s | **0.1179** |
+
+Båda paren går åt fel håll. Vid 0° har `tuned` **mer** backströmning och **mindre** motstånd;
+vid 10° har den **mindre** backströmning och **mer** motstånd. Den enkla läsningen "större
+bubbla = mer motstånd" håller alltså inte.
+
+Skälet är att snittet är **en tvådimensionell skiva genom ett tredimensionellt flöde**. Vid
+yaw ligger avlösningen inte i sagittalplanet, och motståndet beror på var undertrycket verkar
+mot bakåtvänd area — inte på hur mycket vänt flöde som råkar finnas i ett plan.
+
+Bilderna visar alltså strukturen. **Siffrorna kommer från ytintegralerna**, inte härifrån. Det
+är värt att ha sagt, eftersom en vakbild är övertygande på ett sätt som lätt får en att sluta
+räkna.
+
+Ett mönster håller dock i båda positionerna: yaw **halverar** backströmningen i
+symmetriplanet, 10.4 → 5.7 och 12.3 → 4.1. Vid vinkel möter flödet kroppen snett och
+sagittalplanet är inte längre det plan där den släpper.
+
+Bilderna: `docs/fields/05-vaken-*.png`.
+
 ### Uppdelningen räknas nu i körningen: `tools/field_report.py`
 
 Fältbilderna kräver att artefakten laddas ner, och den vägen är blockerad härifrån. Men
