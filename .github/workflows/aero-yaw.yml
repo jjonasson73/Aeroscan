@@ -128,6 +128,15 @@ jobs:
           cp -r postProcessing/CdA_* out/ 2>/dev/null || true
           cp model_info.json out/ 2>/dev/null || true
           cp log.* out/ 2>/dev/null || true
+          # Ytfält och symmetrisnitt. VTK:n är ascii och komprimerar ca 5x, så den åker
+          # med som tar-gz i stället för råa filer.
+          if [ -d postProcessing/diagSurfaces ] || [ -d postProcessing/diagSlice ]; then
+            tar czf out/fields.tar.gz postProcessing/diagSurfaces postProcessing/diagSlice \
+                2>/dev/null || true
+            echo "fältdata: $(du -h out/fields.tar.gz 2>/dev/null | cut -f1)"
+          else
+            echo "VARNING: ingen fältdata skrevs - diagSurfaces/diagSlice saknas"
+          fi
 
       - uses: actions/upload-artifact@v4
         if: always()

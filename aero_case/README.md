@@ -851,6 +851,41 @@ uppblåsningen 1.28.
 
 Se `docs/scan/05-nacke-efter.png`.
 
+### Fältbilder: `tools/plot_fields.py`
+
+En CdA-siffra säger att något är fel men aldrig var. När deltat inte är stabilt är ytfälten
+enda sättet att se varför, så körningarna sparar dem nu.
+
+`system/controlDict` har två nya function objects som skriver **en gång, vid sista
+iterationen** — inte per iteration:
+
+| | vad |
+|---|---|
+| `diagSurfaces` | `p` och `wallShearStress` på rider, bike och båda hjulen |
+| `diagSlice` | `p`, `U`, `k`, `nut` i symmetrisnittet y = 0 |
+
+`Collect` packar dem som `fields.tar.gz` i artefakten. Utan det steget slängs fälten när
+runnern rivs, vilket är vad som hänt i alla körningar hittills.
+
+Rendera lokalt:
+
+```
+python3 tools/plot_fields.py <utpackad artefakt> <utkatalog> --uinf 12.5 --tag y10-base
+```
+
+Ger `cp_side`, `cp_top`, `tau_mag_side` och `tau_x_side`.
+
+**Färgvalen är inte smak.** Cp och skillnadskartor är divergerande, blå ↔ grå ↔ röd med noll i
+grått. `|tau_w|` är sekventiell, en hue ljus→mörk. `tau_x` är divergerande, och då är det grå
+bandet **separationslinjen** — där väggskjuvningen byter tecken och flödet vänder.
+
+Aldrig regnbåge. En regnbågsskala lägger falska kanter där hue:n hoppar, och i ett tryckfält
+läses de kanterna lätt som fysik. Det är den vanligaste lögnen i CFD-bilder.
+
+**Ett förbehåll:** fälten skrivs vid sista iterationen. Är flödet instationärt — vilket det ser
+ut att vara vid yaw — är bilden ett ögonblick ur svängningen, inte ett medelvärde. Två
+körningar av samma fall kan då visa olika bilder, och det är i sig ett besked.
+
 ## Begränsningar
 - Kroppen är byggd av ellipsoider/konvexa skal – ger rätt volym/siluett, inte veck i löst tyg
 - Ekrar är utelämnade (hjulen = fälg + däck + nav). Navet hänger fritt inuti fälgen.
