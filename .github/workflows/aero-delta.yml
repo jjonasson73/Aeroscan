@@ -153,6 +153,11 @@ jobs:
       # Samma rapportflode som aero-yaw: siffror plus bilder pa results-grenen, dar
       # GitHub renderar dem direkt och historiken blir grenens git-log.
       - name: Bygg rapport
+        # continue-on-error med flit. Rapporten ar en bekvamlighet; siffrorna har redan
+        # natt sammanfattningen i steget innan. Ett fel har - en bugg i byggskriptet, eller
+        # en GITHUB_TOKEN som bara har lasrattighet - ska inte gora en lyckad CFD-korning
+        # rod. Steget syns da som en varning i granssnittet i stallet.
+        continue-on-error: true
         env:
           FIT: ${{ inputs.fit }}
           REPS: ${{ inputs.replicates }}
@@ -169,6 +174,11 @@ jobs:
             --repo "${{ github.repository }}"
 
       - name: Publicera pa results-grenen
+        # continue-on-error med flit. Rapporten ar en bekvamlighet; siffrorna har redan
+        # natt sammanfattningen i steget innan. Ett fel har - en bugg i byggskriptet, eller
+        # en GITHUB_TOKEN som bara har lasrattighet - ska inte gora en lyckad CFD-korning
+        # rod. Steget syns da som en varning i granssnittet i stallet.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MESH: ${{ inputs.mesh }}
