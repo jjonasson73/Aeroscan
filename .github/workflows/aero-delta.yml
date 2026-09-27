@@ -122,6 +122,9 @@ jobs:
     needs: run
     if: always()
     runs-on: ubuntu-24.04
+    # Skrivrättighet behövs för att publicera rapporten på results-grenen.
+    permissions:
+      contents: write
     defaults:
       run: { shell: bash, working-directory: aero_case }
     steps:
@@ -130,11 +133,77 @@ jobs:
         with: { path: aero_case/results }
       - name: Delta report
         run: |
-          pip install --quiet numpy
+          pip install --quiet numpy trimesh pillow
           # tee: utslaget måste synas i jobbloggen också, inte bara i sammanfattningen -
           # sammanfattningen går inte att läsa via API:et.
           {
             echo "## ${{ inputs.fit }} · ${{ inputs.mesh }} · ${{ inputs.speed }} m/s · repliker ${{ inputs.replicates }}"
             echo
             python3 tools/delta_report.py results 150 replik
-          } | tee -a $GITHUB_STEP_SUMMARY
+            echo
+            # Fältuppdelningen skrivs till LOGGEN, inte som bild. Siffrorna var det som
+            # gav mekanismen bakom den instabila 10-graderspunkten, de kostar ingenting
+            # i git, och de gar att lasa via API:et. Faller den ska rapporten anda sta kvar.
+            python3 tools/field_report.py results --uinf "${{ inputs.speed }}" \
+              || echo '*Faltuppdelningen misslyckades - se loggen.*'
+          } | tee body.md >> "$GITHUB_STEP_SUMMARY"
+          # Samma text till loggen, eftersom sammanfattningen inte gar att lasa via API:et.
+          cat body.md
+
+      # Samma rapportflode som aero-yaw: siffror plus bilder pa results-grenen, dar
+      # GitHub renderar dem direkt och historiken blir grenens git-log.
+      - name: Bygg rapport
+        # continue-on-error med flit. Rapporten ar en bekvamlighet; siffrorna har redan
+        # natt sammanfattningen i steget innan. Ett fel har - en bugg i byggskriptet, eller
+        # en GITHUB_TOKEN som bara har lasrattighet - ska inte gora en lyckad CFD-korning
+        # rod. Steget syns da som en varning i granssnittet i stallet.
+        continue-on-error: true
+        env:
+          FIT: ${{ inputs.fit }}
+          REPS: ${{ inputs.replicates }}
+          MESH: ${{ inputs.mesh }}
+          SPEED: ${{ inputs.speed }}
+        run: |
+          D=$(date -u +%Y-%m-%d)
+          python3 tools/build_report.py results report \
+            --body body.md --uinf "$SPEED" \
+            --run-id "${{ github.run_id }}" --mesh "$MESH" \
+            --fit "$FIT" --angles "repliker $REPS" \
+            --commit "${{ github.sha }}" --date "$D" \
+            --slug "$D-${{ github.run_id }}-$MESH-delta" \
+            --repo "${{ github.repository }}"
+
+      - name: Publicera pa results-grenen
+        # continue-on-error med flit. Rapporten ar en bekvamlighet; siffrorna har redan
+        # natt sammanfattningen i steget innan. Ett fel har - en bugg i byggskriptet, eller
+        # en GITHUB_TOKEN som bara har lasrattighet - ska inte gora en lyckad CFD-korning
+        # rod. Steget syns da som en varning i granssnittet i stallet.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MESH: ${{ inputs.mesh }}
+        run: |
+          D=$(date -u +%Y-%m-%d); SLUG="$D-${{ github.run_id }}-$MESH-delta"
+          R=$(mktemp -d)
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          if git clone --depth 1 --branch results "$URL" "$R" 2>/dev/null; then
+            echo "results-grenen finns"
+          else
+            echo "skapar results-grenen"
+            git clone --depth 1 "$URL" "$R"
+            git -C "$R" checkout --orphan results
+            git -C "$R" rm -rq --cached . || true
+            find "${R:?}" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          fi
+          mkdir -p "$R/runs"; rm -rf "$R/runs/$SLUG"; cp -r report "$R/runs/$SLUG"
+          python3 tools/build_report.py --index "$R/runs"
+          cd "$R"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Rapport: $SLUG" || { echo "inget nytt att commita"; exit 0; }
+          for i in 1 2 3 4; do
+            git push origin results && exit 0
+            sleep $((2 ** i)); git pull --rebase origin results || true
+          done
+          echo "push misslyckades efter fyra forsok" >&2; exit 1

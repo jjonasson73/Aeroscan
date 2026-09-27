@@ -3,6 +3,23 @@
 **Skala:** hjul 700c + 25 mm däck → Ø672 mm (sidovy, 1.556 mm/px, ~3° kamerarotation korrigerad via axellinjen). Hjälmbredd 190 mm → breddskala i frontvyn (perspektivkorrigerad för axlar/knän).
 **Kontroll:** hjälmlängd från sidovyn blev 316 mm (rimligt för kort aerohjälm), hjulbas 982 mm, vevlagerhöjd 248 mm.
 
+## Resultat att titta på efter en körning
+
+Varje körning publicerar sig själv på grenen **[`results`](../../tree/results/runs)**: en mapp
+per körning med samma tabeller som i jobbsammanfattningen, plus Cp-, skjuvnings- och vakbilder.
+GitHub renderar markdown med bilder direkt i webben, så det går att läsa på telefon utan att
+ladda ner något. Indexet i `runs/README.md` listar alla körningar nyast först med deltat per
+vinkel.
+
+Historiken är grenens git-log. Det är hela poängen: rå VTK i artefakterna försvinner efter 30
+dagar, så en körning som ingen skrev upp för hand var tidigare i praktiken borta.
+
+Rapporten byggs av `tools/build_report.py` i verdict-jobbet. Den tar de tre bilder per fall som
+faktiskt läses — Cp i sidvy, `tau_w,x` som visar separationslinjen, och vaken ur symmetrisnittet
+— och kvantiserar dem till palett, vilket tar en ytrendering från ~350 till ~125 kB. En körning
+kostar ungefär 3 MB. Den fullständiga uppsättningen, inklusive topvy och skjuvningsmagnitud,
+ligger kvar i körningens artefakt i 30 dagar tillsammans med rå VTK för ParaView.
+
 ## Innehåll
 - `geometry/` – rider.stl, bike.stl, wheel_rear.stl, wheel_front.stl (vattentäta, meter).
   `rider_bike_full.stl` (boolesk union) genereras också men är gitignorerad – den används bara
@@ -866,6 +883,191 @@ uppblåsningen 1.28.
 
 Se `docs/scan/05-nacke-efter.png`.
 
+### Oavsiktlig men avgörande: 10° är stabilt, 0° är inte konvergerat (2026-09-26)
+
+Run 36224931538 kördes för fältbildernas skull, `[0,10]`, 1500 iterationer, commit 2ebb5ae.
+`build_model.py` är **oförändrad** sedan 70e21da, så geometrin är identisk med körningen dagen
+före. Enda skillnaden är iterationstalet. Det gör paret till ett rent experiment på numeriken.
+
+| | 2500 iter | 1500 iter | skillnad |
+|---|---|---|---|
+| 0° base | 0.1923 | 0.1952 | **+0.0029** |
+| 0° tuned | 0.1897 | 0.1889 | −0.0008 |
+| **0° ΔCdA** | **−0.0026** | **−0.0063** | **0.0037** |
+| 10° base | 0.1899 | 0.1899 | **0.0000** |
+| 10° tuned | 0.1928 | 0.1929 | 0.0001 |
+| **10° ΔCdA** | **+0.0030** | **+0.0030** | **0.0000** |
+
+**10-graderspunkten reproducerar på fjärde decimalen** mellan 1500 och 2500 iterationer. Den är
+konvergerad, och de extra tusen iterationerna ändrade ingenting.
+
+**0-graderspunkten gör det inte.** Deltat rör sig 0.0037, fem gånger replikspridningen, och
+`base` ensam flyttar 0.0029. Vid 1500 iterationer driver 0°-fallet fortfarande.
+
+Det vänder på antagandet som styrde de senaste dagarnas arbete. Jag valde 10° som
+diagnosvinkel eftersom dess tecken bytt tre gånger och jag läste det som instabilitet. Tecknet
+bytte mellan **geometriversioner**, inte mellan körningar. Punkten är numeriskt stenhård och
+extremt geometrikänslig — vilket är två helt olika problem.
+
+Konsekvenser:
+
+- Slutsatsen att deltat inte är konvergerat med avseende på geometridetalj **står kvar**, och
+  får nu stöd från andra hållet: samma geometri ger samma svar på fjärde decimalen, så när
+  svaret ändå flyttar sig är det geometrin.
+- Alla 0°-siffror från körningar med **1500 iterationer är underiterererade** och ska inte
+  jämföras med 2500-iterationskörningen. Det gäller replikerna, kappmuskelkörningen och den här.
+- CdA_eff-tabellen i den här körningen vilar på ett underiterererat 0° och ska inte läsas som
+  ett resultat.
+
+Minsta iterationstal för 0° är alltså **över 1500**. Om det räcker med 2500 är inte visat — det
+kräver ett tredje steg, exempelvis 3500, för att se om 0° då står still.
+
+### Fältbilderna svarar: deltat är en korsning, inte ett hopp (2026-09-26)
+
+Run 36224931538 med fältdata. Två valideringar först, eftersom en fältbild är värdelös om
+skalningen är fel:
+
+- **Stagnationstrycket ger Cp = +1.014.** Läroboksfacit är exakt 1.0. Trycket och skalningen
+  stämmer.
+- **Ytintegralen reproducerar rapportens CdA.** Summan av tryck- och friktionsbidrag per
+  triangel ger 0.1916 mot rapporterade 0.1899 vid y10-base, alltså 0.9 % fel. Uppdelningen
+  nedan går därför att lita på.
+
+#### Ett teckenfel, funnet av integralen
+
+OpenFOAMs `wallShearStress` returnerar spänningen med **motsatt tecken mot
+strömningsriktningen**. Med råa värden blev friktions-CdA −0.0111 m², och friktionsmotstånd
+måste vara positivt i färdriktningen. Vänt tecken ger +0.0111, vilket är **5.8 % av total CdA** —
+rimligt för en trubbig kropp.
+
+Utan den vändningen läste bilden bakvänt: allt attached flöde såg ut som backströmning.
+`tools/plot_fields.py` vänder nu tecknet och motiverar det i koden.
+
+#### Det som faktiskt hände
+
+| ryttarens CdA | 0° | 10° | ändring |
+|---|---|---|---|
+| base | 0.1275 | 0.1144 | **−0.0131** |
+| tuned | 0.1179 | **0.1179** | **0.0000** |
+
+**Den trimmade positionen är oförändrad av yaw. Basen tappar kraftigt.** Tecknet på ΔCdA vänder
+mellan 0° och 10° därför att **kurvorna korsar varandra**, inte för att någon punkt hoppar.
+
+Det förklarar hela instabiliteten. Deltat är differensen mellan en brant fallande och en platt
+kurva. Var de korsas avgör tecknet, och korsningen flyttar sig lätt när geometrin ändras.
+
+#### Och det sitter i ett enda band
+
+CdA-bidrag per höjdband över mark, se `docs/fields/01-hojdband.png`:
+
+| höjd | 0° base | 0° tuned | Δ | 10° base | 10° tuned | Δ |
+|---|---|---|---|---|---|---|
+| 600–750 | 0.0239 | 0.0212 | −0.0027 | 0.0187 | 0.0185 | −0.0002 |
+| 900–1050 | 0.0138 | 0.0167 | +0.0029 | 0.0194 | 0.0193 | −0.0001 |
+| **1050–1200** | **0.0318** | **0.0259** | **−0.0059** | **0.0257** | **0.0309** | **+0.0052** |
+| 1200–1350 | 0.0176 | 0.0149 | −0.0027 | 0.0157 | 0.0138 | −0.0019 |
+
+**Bandet 1050–1200 mm vänder ensamt.** Det är övre ryggen och axlarna, strax under
+axelleden på 1229 mm. Vid 0° är `tuned` klart bättre där, vid 10° klart sämre. Ingen annan del
+av kroppen gör något liknande.
+
+Och bandet **1200–1350 mm** är precis där `nape`-ellipsoiden lades till. Att den ändringen
+flyttade 10-graderspunkten 0.0085 är alltså inte längre förvånande — den satt mitt i en av de
+två stora termer som nästan tar ut varandra.
+
+Slutsatsen att deltat inte är konvergerat med avseende på geometridetalj står alltså kvar, men
+nu med en mekanism: **ΔCdA är en liten rest mellan stora motverkande bidrag i övre ryggen.**
+Rör man geometrin där rör sig resten oproportionerligt.
+
+Väggskjuvningen i det bandet, base mot tuned, finns i `docs/fields/02-bal-10grader.png`. Den
+visar skillnaden men inte dramatiskt — siffrorna är det starkare beviset, bilden stödjer dem.
+
+**Förbehåll:** fälten är skrivna vid sista iterationen, alltså ett ögonblick. Och 0°-fallen är
+underiterererade vid 1500 iterationer, vilket gör 0°-kolumnerna ovan mindre säkra än
+10°-kolumnerna.
+
+### Vaken: `tools/plot_wake.py`
+
+`diagSlice` sparar symmetrisnittet med `U`, `p`, `k` och `nut`. Verktyget ritar det.
+
+Riktningen visas med **LIC** — brus utsmetat längs flödet — i stället för pilar eller
+strömlinjer. Pilar kräver att man väljer en täthet, strömlinjer att man väljer startpunkter,
+och båda valen döljer det man inte råkade välja. LIC visar hela strukturen, inklusive
+återcirkulationen, utan att man bestämt var man ska titta.
+
+```
+python3 tools/plot_wake.py <fallkatalog> <ut.png> --uinf 12.5
+```
+
+**Det här är stationär RANS, alltså MEDELFLÖDET.** Virvelavlösningar syns inte — de är
+medelvärdesbildade bort. Det man ser är den stående återcirkulationsbubblan, inte en
+ögonblicksbild av virvlar. Vill man se avlösning i tiden krävs URANS eller LES.
+
+#### Andelen backströmning förutsäger INTE motståndet
+
+| fall | backströmning i snittet | lägsta Ux | ryttarens CdA |
+|---|---|---|---|
+| y0-base | 10.4 % | −9.9 m/s | 0.1275 |
+| y0-tuned | **12.3 %** | −10.1 m/s | **0.1179** |
+| y10-base | 5.7 % | −6.6 m/s | 0.1144 |
+| y10-tuned | **4.1 %** | −6.7 m/s | **0.1179** |
+
+Båda paren går åt fel håll. Vid 0° har `tuned` **mer** backströmning och **mindre** motstånd;
+vid 10° har den **mindre** backströmning och **mer** motstånd. Den enkla läsningen "större
+bubbla = mer motstånd" håller alltså inte.
+
+Skälet är att snittet är **en tvådimensionell skiva genom ett tredimensionellt flöde**. Vid
+yaw ligger avlösningen inte i sagittalplanet, och motståndet beror på var undertrycket verkar
+mot bakåtvänd area — inte på hur mycket vänt flöde som råkar finnas i ett plan.
+
+Bilderna visar alltså strukturen. **Siffrorna kommer från ytintegralerna**, inte härifrån. Det
+är värt att ha sagt, eftersom en vakbild är övertygande på ett sätt som lätt får en att sluta
+räkna.
+
+Ett mönster håller dock i båda positionerna: yaw **halverar** backströmningen i
+symmetriplanet, 10.4 → 5.7 och 12.3 → 4.1. Vid vinkel möter flödet kroppen snett och
+sagittalplanet är inte längre det plan där den släpper.
+
+Bilderna: `docs/fields/05-vaken-*.png`.
+
+### Uppdelningen räknas nu i körningen: `tools/field_report.py`
+
+Fältbilderna kräver att artefakten laddas ner, och den vägen är blockerad härifrån. Men
+**siffrorna var det som gav mekanismen** — bilderna stödde dem. Därför räknas uppdelningen nu
+i `verdict`-jobbet och skrivs till **loggen**, som går att läsa via API:et.
+
+Varje körning ger alltså automatiskt:
+
+- CdA-bidrag per del, integrerat ur ytfälten, med summan som kontroll mot forceCoeffs
+- ryttarens bidrag per höjdband, base mot tuned, med Δ per band
+- en markering på band som flyttar mer än 0.0015 m²
+
+Text kostar ingenting i git, till skillnad från PNG:er som inte deltakomprimeras. Bilderna görs
+på begäran med `plot_fields.py` när någon skickar över artefakten.
+
+**Två teckenkonventioner, båda verifierade mot integralen och inte mot magkänslan:**
+
+| | |
+|---|---|
+| `wallShearStress` | returneras med motsatt tecken mot strömningen → vänds i `plot_fields` |
+| vindningen i `.vtp` | ger inåtpekande normaler → **vänds i `read_vtp`**, en gång |
+
+Vindningen hanterades först genom att kompensera tecknet där den användes. Det höll bara tills
+samma mesh renderades: med inåtpekande normaler inverteras ljussättningen, så ovansidan
+skuggas och undersidan lyser — en cyklist belyst underifrån ser upp och ner ut. Användaren såg
+det i 3D-vyn.
+
+Nu vänds vindningen i `read_vtp`, verifierat med divergenssatsen (signerad volym ska vara
+positiv: −0.0716 → +0.0710 m³). CdA-summorna är oförändrade; fixen rör orienteringen, inte
+fysiken.
+
+Kontrollen är att summan reproducerar `forceCoeffs`. På run 36224931538 stämmer den till
+0.5–1 % i alla fyra fallen. Gör den inte det är något antagande fel, och verktyget ska då säga
+till i stället för att tiga.
+
+`verdict` installerar bara `numpy` och `trimesh`; `meshio` importeras lat och behövs bara för
+`.vtk`, medan OpenFOAM skriver `.vtp`.
+
 ### Fältbilder: `tools/plot_fields.py`
 
 En CdA-siffra säger att något är fel men aldrig var. När deltat inte är stabilt är ytfälten
@@ -922,3 +1124,273 @@ körningar av samma fall kan då visa olika bilder, och det är i sig ett besked
 - **Frontvyns skalning finns inte i koden.** Kroppsbredderna (95 mm halv hjälmbredd, 165/172 mm
   bål osv.) är hårdkodade konstanter utan spårbarhet till frontfotot, och `overlay.py` validerar
   bara sidovyn. Byter man frontfoto uppdateras ingenting automatiskt.
+
+### Nätstudien på den nya geometrin: marginalen är borta, men inte av det skäl jag trodde (2026-09-26)
+
+Run 36250629494, `coarse`, `[0,10]`, 1500 iterationer, commit 85805db. Alla fyra jobb gröna,
+ingen driftflagga. `build_model.py`, `pose.py` och `configure_case.sh` är **bitidentiska** med
+2ebb5ae, som kördes på `medium` med samma iterationstal — bara efterbehandlingsverktyg skiljer
+commiterna. Nätnivån är alltså den enda variabeln.
+
+| | coarse | medium | skift |
+|---|---|---|---|
+| 0° base | 0.2079 ± 0.0005 | 0.1952 | −0.0127 |
+| 0° tuned | 0.2079 ± 0.0009 | 0.1889 | −0.0190 |
+| **0° ΔCdA** | **+0.0001** ⚠ | **−0.0063** | **0.0063** |
+| 10° base | 0.2125 ± 0.0004 | 0.1899 | −0.0226 |
+| 10° tuned | 0.2039 ± 0.0008 | 0.1929 | −0.0110 |
+| **10° ΔCdA** | **−0.0085** | **+0.0030** | **0.0116** |
+
+Coarse ligger 0.011–0.023 högre i absolut CdA. Det är väntat och ointressant — grova nät
+överskattar drag. Det som betyder något är att **felet inte är lika stort för base och tuned**:
+vid 10° flyttar base 0.0226 och tuned 0.0110 när nätet förfinas. Det är differensen, 0.0116,
+som slår rakt in i deltat och vänder dess tecken.
+
+#### Min tröskel var satt på fel par
+
+Jag skrev före körningen att om ΔCdA rör sig mer än ~0.0010 mellan coarse och medium är deltat
+inte nätupplöst. **Den tröskeln var felaktigt formulerad, och att tillämpa den rakt av hade gett
+en dramatisk slutsats som data inte bär.** README:s egen nätstudie längre upp visar nämligen att
+coarse *redan* var underkänd vid yaw: på den gamla geometrin gav coarse +0.0058 mot medium
++0.0123, en faktor två fel. Att coarse avviker från medium är alltså inte nytt — det var känt,
+och det var därför `medium` valdes.
+
+Det den här körningen faktiskt visar är något smalare:
+
+- **Coarse är fortfarande oanvändbar vid yaw.** Bekräftar det kända.
+- **Avvikelsen har vuxit från en faktor två till ett teckenbyte** — inte för att nätkänsligheten
+  ökat, utan för att *signalen krympt*. Coarse→medium rörde deltat 0.0065 på den gamla
+  geometrin och 0.0116 nu, samma storleksordning. Men deltat självt gick från +0.0123 till
+  +0.0030.
+
+#### Vad som därmed INTE är visat
+
+Frågan som avgör om siffran duger är **medium mot fine**, inte coarse mot medium. Den
+jämförelsen finns bara på den gamla geometrin, där skillnaden var 0.0014 — 11 % av deltat, väl
+inom go/no-go-kriteriets 20 %. Ett fel av samma absoluta storlek mot dagens signal på 0.0030
+skulle vara **47 %**.
+
+Så marginalen har kollapsat från 11 % till uppskattningsvis ~47 %, men det är en extrapolering
+från gammal geometri, inte en mätning. **Om medium är nätkonvergerat för den nya geometrin är
+inte visat.** Det kräver medium↔fine på nuvarande geometri, vilket inte är kört.
+
+#### Rangordningen av felkällor, som är det som styr nästa steg
+
+Allt vid 10°, som är den enda vinkeln som är iterationskonvergerad:
+
+| källa | flyttar ΔCdA | mätt på |
+|---|---|---|
+| repliker, identisk geometri | 0.0003 | medium |
+| 1500 → 2500 iterationer | 0.0000 | medium |
+| nät, medium → fine | ~0.0014 | gammal geometri |
+| kappmuskeln, 342 mm hål | 0.0040 | medium |
+| **nape, 42 mm skreva** | **0.0074** | medium |
+| *(nät, coarse → medium)* | *0.0116* | *underkänd nivå* |
+
+**Geometridetalj är fortfarande den största posten**, en faktor 3–5 över nätet vid medium. Den
+slutsatsen från kappmuskel- och nape-körningarna står kvar, och den här körningen rör den inte.
+
+Men notera vad tabellen säger om signalen: ΔCdA vid 10° är 0.0030, alltså **mindre än
+geometrikänsligheten på 0.0040–0.0074**. Positionsdeltat vid 10 grader går i dagsläget inte att
+upplösa alls — det som ska mätas är mindre än osäkerheten i det som matar mätningen.
+
+Det är ett argument *för* bättre geometri, inte emot. Men det betyder också att ingen
+nätförfining räddar siffran så länge geometrin är en parametrisk approximation, och att en
+skanner inte heller ger ett svar förrän medium↔fine är körd på den nya geometrin så att man vet
+vilken av de två posterna som faktiskt binder.
+
+#### Rättelse samma dag: medium↔fine testar inte det jag skrev att det testar
+
+Raden ovan löd först att nästa experiment är medium↔fine. Det är fel, och felet kommer av att
+jag inte läst nivådefinitionerna ordentligt. Från `tools/configure_case.sh` och
+`system/snappyHexMeshDict`:
+
+| nivå | yta | kanter | nearBox | wakeBox |
+|---|---|---|---|---|
+| coarse | (4 5) | 5 | 3 | 2 |
+| medium | (5 6) | 6 | 3 | 2 |
+| fine | (5 6) | 6 | 4 | 3 |
+
+**Coarse→medium ändrar bara ytupplösningen. Medium→fine ändrar bara vakboxarna.** Skriptets
+egen kommentar på rad 106 säger det: medium är "fine's surface resolution with coarse's
+refinement boxes", just för att coarse↔medium ska isolera kroppsupplösningen.
+
+Det betyder att den gamla nätstudiens två jämförelser mätte olika saker:
+
+- **medium↔fine = 0.0014** → *volym- och vakupplösningen* är konvergerad.
+- **coarse↔medium = 0.0065** → *ytupplösningen* är inte konvergerad, och medium är den finaste
+  ytnivån som finns.
+
+Slutsatsen "medium och fine är överens, alltså duger medium" är därför starkare formulerad än
+data bär. Att två nivåer med *identisk yta* ger samma svar visar att boxarna räcker, inte att
+ytan gör det. **Ytkonvergens är aldrig visad** — bara att medium är bättre än coarse, vilket är
+en jämförelse underifrån.
+
+Så den här körningen och den jag först föreslog svarar båda på fel fråga:
+
+| experiment | testar | status |
+|---|---|---|
+| coarse↔medium | ytan, underifrån | kört, teckenbyte |
+| medium↔fine | boxarna | mätt 0.0014 på gammal geometri |
+| **medium↔(6 7)** | **ytan, ovanifrån** | **aldrig kört, finns inte i skriptet** |
+
+Två experiment står alltså kvar, och de är inte utbytbara:
+
+1. **fine vid 10° på nuvarande geometri**, 2 jobb. Boxtermen är känd till 0.0014 från gammal
+   geometri, men mot dagens signal på 0.0030 är det 47 %. Den behöver mätas om på den nya
+   geometrin, där vaken ändrats av nape och hjälmen. Nivån är bevisat körbar.
+2. **En ny ytnivå (6 7) med mediums boxar**, 2 jobb. Den enda som kan visa ytkonvergens. Finns
+   inte i `configure_case.sh` och måste läggas till.
+
+Kostnad, mätt på de två körningarna: coarse 35–39 min, medium 84–95 min mesh+solve, alltså
+faktor 2.4 per ytnivå. En nivå till landar grovt på 3.5–5 h, inom 6-timmarsgränsen men med
+marginal som inte är stor.
+
+Innan punkt 2 är körd är både "nätet räcker" och "nätet räcker inte" obelagda påståenden.
+
+### Ytnivån över medium: `surf`, och varför den blev ett halvsteg (2026-09-26)
+
+Tillagd som nätnivå `surf` i `tools/configure_case.sh`: **mediums boxar, ryttarens yta en nivå
+finare.** Enda variabeln mot medium är ryttarens ytupplösning, vilket är villkoret för att
+siffran ska gå att tolka.
+
+Bara ryttaren, eftersom den är den enda delen som skiljer base från tuned — det är dess
+upplösning som kan flytta deltat. Cykel och hjul är identisk geometri och deras rader i
+uppdelningen fungerar som kontroll.
+
+**Ett fullt steg till (6 7) ryms inte.** Räknat på `log.snappyHexMesh` från medium: ytbandet i
+castellated-nätet är 168 647 celler på nivå 5 och 227 400 på nivå 6, och ryttaren är 51 % av
+ytarean (1.714 m² av 3.374 m²). En nivå upp åttafaldigar de berörda cellerna:
+
+| variant | castellated | slutnät | grov solvtid | mot taket 355 min |
+|---|---|---|---|---|
+| medium, som referens | 461 k | 1.40 M | 84–95 min (mätt) | — |
+| rider (6 6) | 1.06 M | ~3.2 M | ~220 min | ryms |
+| rider (6 7) | 1.87 M | ~5.7 M | ~380 min | **spränger** |
+| alla fyra (6 7) | 3.23 M | ~9.8 M | — | spränger grovt |
+
+En timeout förlorar hela jobbet, så (6 6) är valt: det lyfter *minnivån* från 5 till 6 så att
+ytan blir jämnt upplöst i stället för krökningsstyrd. Kantförfiningen låg redan på 6 och är
+oförändrad.
+
+**Det träffar dessutom rätt ställe.** Fältuppdelningen lokaliserade teckenvändningen till bandet
+1050–1200 mm, alltså övre ryggen och skuldrorna — en bred, flack yta, som är precis den sorts
+region medium lägger på nivå 5 och som (6 6) lyfter. De krökta partierna låg redan på 6.
+
+**Asymmetrin i vad utfallet bevisar, satt före körningen:**
+
+- **Flyttar ΔCdA sig** → ytupplösningen binder. Fullgott resultat, och då är nätet flaskhalsen
+  före geometrin.
+- **Står ΔCdA still** → svagare bevis än det ser ut. De krökta partierna låg på nivå 6 i båda
+  fallen, så ett nivå-7-test återstår och kräver en större maskin än GitHubs löpare. Det får
+  läsas som "ingen indikation på ytberoende", inte som "ytan är konvergerad".
+
+Tröskeln är densamma som förut, och den gäller nu rätt par: **rör sig ΔCdA vid 10° mer än
+~0.0010 är ytan inte upplöst.**
+
+#### Sidofynd: `$NP` är odefinierad i aero-yaw.yml
+
+`configure_case.sh` anropas med `"$NP"` men variabeln sätts aldrig i det workflowet, så
+`foamDictionary -entry numberOfSubdomains -set ""` blir en no-op. Alla körningar har därmed
+använt 4 processorer (`nProcs : 4` i varje logg), konsekvent i både coarse- och
+medium-körningen, så ingen jämförelse är korrupt.
+
+**Lämnas orörd med flit.** Att sätta processantalet ändrar MPI-reduktionsordningen och därmed
+sista decimalerna, vilket skulle bryta jämförbarheten mot medium-körningen som hela
+nätstudien vilar på. Fixas när ingen aktiv jämförelse hänger på den.
+
+### Utfallet: 0° är nätkonvergerat, 10° är det inte — och medium är avvikaren (2026-09-26)
+
+Run 36255126139, `surf`, `[0,10]`, 1500 iterationer, commit 6d4a3b3. Alla fem jobb gröna, ingen
+driftflagga. Fältuppdelningen kom med den här gången, så PIL-fixen håller.
+
+| yaw | base CdA ± svängning | tuned CdA ± svängning | ΔCdA |
+|---|---|---|---|
+| +0 | 0.1965 ± 0.0025 | 0.1902 ± 0.0021 | **−0.0063** ± 0.0032 |
+| +10 | 0.1974 ± 0.0014 | 0.1889 ± 0.0018 | **−0.0084** ± 0.0023 |
+
+Kontrollraderna är bra: vid 0° ligger bike på +0.0007 och wheels på −0.0003, vid 10° −0.0012 och
+−0.0009. Jämfört med coarse-körningens −0.0041 på bike har näten inte drivit isär.
+
+#### Tre nivåer, två helt olika svar
+
+| yaw | coarse (4 5) | medium (5 6) | surf (6 6) | spann |
+|---|---|---|---|---|
+| **0°** | +0.0001 ⚠ | **−0.0063** | **−0.0063** | 0.0063 |
+| **10°** | **−0.0085** | **+0.0030** | **−0.0084** | 0.0116 |
+
+**Vid 0° är deltat nätkonvergerat.** Medium och surf ger −0.0063 båda, identiskt på fjärde
+decimalen. Ytförfiningen flyttade det **0.0000**. Coarse ligger utanför, men dess 0°-delta var
+flaggat som mindre än svängningen och var aldrig ett resultat. Det här är första gången i
+projektet ett delta står still mot en nätändring.
+
+**Vid 10° är det inte konvergerat, och värre: det är icke-monotont.** −0.0085 → +0.0030 →
+−0.0084 när nätet förfinas i tre steg. En konvergerande följd går monotont mot ett värde; den här
+går ner, upp, ner. Då går det inte ens att extrapolera fram ett svar.
+
+Tröskeln satt före körningen var att en rörelse över 0.0010 vid 10° betyder att ytupplösningen
+binder. Rörelsen är **0.0115**. Tröskeln är uppfylld med stor marginal.
+
+Men fyndet är rikare än tröskeln förutsåg: **coarse och surf är överens om −0.0085, och medium
+står ensam på +0.0030.** Två av tre nivåer säger att den tunade positionen *vinner* vid 10
+grader. Det är medium som säger att den förlorar — och medium är den körning hela slutsatsen
+"positionen förlorar i sidvind" vilade på.
+
+#### Mekanismen pekar mot att medium är felet, inte att allt är brus
+
+Bandet 1050–1200 mm, övre ryggen, vid 10 grader:
+
+| nivå | base | tuned | Δ |
+|---|---|---|---|
+| medium | 0.0257 | 0.0309 | **+0.0052** |
+| surf | 0.0258 | 0.0267 | **+0.0009** |
+
+**`base` rörde sig +0.0001. `tuned` rörde sig −0.0042.** Ytförfiningen lämnade baseline i stort
+sett oberörd och tog bort fyra femtedelar av det positiva bidraget i den tunade positionen. Det
+var precis det bidraget som vände tecknet på medium.
+
+Det är fysikaliskt rimligt: den tunade positionen är lägre och flackare, så dess övre rygg möter
+flödet mer strykande. En flack yta i strykande flöde är den sortens region medium lägger på nivå
+5 och där upplösningen betyder mest. Hypotesen är därför att **medium underupplöste den tunade
+positionens övre rygg vid yaw och producerade ett falskt positivt bidrag där.**
+
+Det är en hypotes med stöd, inte ett fastställt faktum. Tre punkter kan inte skilja "medium är
+avvikande" från "alla tre är brus". Det som skulle avgöra det är en replik av medium vid 10° med
+störd nätning — reproducerar inte +0.0030 var medium anomal.
+
+#### Var projektet står: ingen vinkel har båda egenskaperna
+
+| vinkel | iterationskonvergerad | nätkonvergerad (yta) |
+|---|---|---|
+| **0°** | **NEJ** — rör sig 0.0037 mellan 1500 och 2500 | **JA** — 0.0000 medium→surf |
+| **10°** | **JA** — 0.0000 mellan 1500 och 2500 | **NEJ** — 0.0115, icke-monotont |
+
+Det är en obekväm symmetri. Varje vinkel har den egenskap den andra saknar, och inget tal i
+projektet har ännu båda.
+
+**Billigaste vägen till ett fullt kvalificerat tal: `surf` vid 0° med 2500 iterationer, två
+jobb.** 0° är redan nätkonvergerat, så det som fattas är iterationerna. Körtiden nedan säger att
+det ryms.
+
+#### Min tidsuppskattning var för pessimistisk
+
+| | mesh+solve | mot förutsagt |
+|---|---|---|
+| medium | 84–95 min, snitt 90 | — |
+| surf | 102–138 min, snitt 121 | **1.35×**, jag förutsåg 2.3× |
+
+Cellantalet går inte att verifiera — artefakten ligger på Azure blob-lagring som proxyn
+policyblockerar, och loggar serveras inte för pågående jobb (404), så förvarningen jag planerade
+mitt i körningen var aldrig möjlig. Men faktorn 1.35 mot förutsagda 2.3 betyder att nätet växte
+klart mindre än de ~3.2 M celler jag räknade fram.
+
+**Konsekvensen är att (6 7) sannolikt hade rymts.** Min uppskattning på ~380 min byggde på samma
+överskattning. Ett riktigt nivå-7-test på ytan är alltså inte utom räckhåll för GitHubs löpare,
+tvärtemot vad jag skrev innan körningen. Det är den jämförelse som skulle stänga 10-gradersfrågan.
+
+#### Vad som inte ska läsas ur den här körningen
+
+CdA_eff-tabellen säger nu att den tunade positionen vinner vid varje vindstyrka, −3.2 % till
+−4.1 %. **Läs den inte som ett resultat.** Den vilar på 10-graderspunkten, som är den punkt som
+just visats vara icke-konvergerad, och på ett 0° som är underiterererat. Att den ser trevlig ut
+är inget argument för den.

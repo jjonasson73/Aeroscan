@@ -3,7 +3,7 @@
 # workflows cannot drift apart -- a delta comparison is only meaningful if both sides were
 # set up by exactly the same code.
 #
-#   tools/configure_case.sh <quick|coarse|medium|fine> <speed> <max_iterations> <nprocs> [fixed] [wide]
+#   tools/configure_case.sh <quick|coarse|medium|surf|surf7|fine> <speed> <max_iterations> <nprocs> [fixed] [wide]
 #
 # A fifth argument "fixed" disables runTimeControl so the run goes to exactly max_iterations.
 # A delta comparison needs both positions equally converged; letting the convergence monitor
@@ -107,6 +107,57 @@ case "$MESH" in
     # ONLY in how finely the body is resolved, which is what a refinement study needs.
     foamDictionary -entry castellatedMeshControls/refinementRegions/nearBox/levels -set "((1E15 3))" $S
     foamDictionary -entry castellatedMeshControls/refinementRegions/wakeBox/levels -set "((1E15 2))" $S ;;
+  surf)
+    # En ytnivå OVANFÖR medium, och bara på ryttaren. Den enda jämförelsen som kan visa
+    # ytkonvergens: coarse<->medium jämför underifrån och kan bara visa att medium är bättre
+    # än coarse, aldrig att medium räcker. medium<->fine ändrar bara boxarna.
+    #
+    # Boxarna hålls därför på mediums värden. Skillnaden mot medium är ENBART ryttarens
+    # ytupplösning, vilket är villkoret för att siffran ska gå att tolka.
+    #
+    # Bara ryttaren, eftersom den är den enda delen som skiljer mellan base och tuned -- det
+    # är dess upplösning som kan flytta deltat. Cykel och hjul är identisk geometri och deras
+    # rader i uppdelningen är kontrollen.
+    #
+    # (6 6), inte (6 7). Ett fullt steg till (6 7) ger enligt cellräkningen nedan ~5.7 M
+    # celler mot mediums 1.40 M, alltså omkring 380 min mot jobbets tak på 355 -- och en
+    # timeout förlorar hela jobbet. (6 6) lyfter minnivån från 5 till 6 så att ytan blir
+    # jämnt upplöst i stället för att kröknings- styras: ~3.2 M celler och ~220 min.
+    #
+    # Räkningen, från log.snappyHexMesh på medium: ytbandet i castellated är 168 647 celler
+    # på nivå 5 och 227 400 på nivå 6. Ryttaren är 51 % av ytarean. En nivå upp åttafaldigar
+    # de berörda cellerna.
+    #
+    # Asymmetrin i vad utfallet bevisar är viktig: flyttar deltat sig så BINDER
+    # ytupplösningen, och det är ett fullgott resultat. Står det still är det svagare bevis
+    # än det ser ut -- de krökta partierna låg på nivå 6 i båda fallen, så ett nivå-7-test
+    # återstår och kräver en större maskin än GitHubs löpare.
+    foamDictionary -entry castellatedMeshControls/refinementSurfaces/rider/level -set "(6 6)" $S
+    foamDictionary -entry castellatedMeshControls/refinementRegions/nearBox/levels -set "((1E15 3))" $S
+    foamDictionary -entry castellatedMeshControls/refinementRegions/wakeBox/levels -set "((1E15 2))" $S ;;
+  surf7)
+    # Ett FULLT steg över medium på ryttaren: (5 6) -> (6 7), och kantförfiningen 6 -> 7
+    # så att steget är helt, inte halvt. surf (6 6) var halvsteget, valt när jag trodde
+    # (6 7) spränger tidsgränsen. Körtiden på surf blev 1.35x medium mot förutsagda 2.3x,
+    # så uppskattningen var för pessimistisk och det här ryms sannolikt.
+    #
+    # Boxarna hålls på mediums värden, som i surf. Enda variabeln är ryttarens yta.
+    #
+    # UNIFORM förfining, inte en lokal låda kring övre ryggen. En lokal ficka av fina
+    # celler är inte "ett steg finare" utan ett annat nät med annan topologi, och då går
+    # följden coarse/medium/surf/surf7 inte att läsa som en konvergensserie. Lådans kant
+    # blir dessutom ett upplösningshopp mitt i det band vi mäter, och prismalagren fallerar
+    # helst just vid upplösningsbyten - vilket skulle ändra väggskjuvningen vi läser av.
+    # Lokal förtätning hör till produktionskörningar, inte till en konvergensstudie.
+    foamDictionary -entry castellatedMeshControls/refinementSurfaces/rider/level -set "(6 7)" $S
+    foamDictionary -entry castellatedMeshControls/features -set       '({file "rider.eMesh"; level 7;} {file "bike.eMesh"; level 6;} {file "wheel_rear.eMesh"; level 6;} {file "wheel_front.eMesh"; level 6;})' $S
+    foamDictionary -entry castellatedMeshControls/refinementRegions/nearBox/levels -set "((1E15 3))" $S
+    foamDictionary -entry castellatedMeshControls/refinementRegions/wakeBox/levels -set "((1E15 2))" $S
+    # maxLocalCells är 2 M per processor, alltså 8 M på fyra. Räckte inte det skulle snappy
+    # SLUTA FÖRFINA UTAN ATT FELA, och vi hade fått ett tyst underupplöst nät som ser ut som
+    # en giltig datapunkt i konvergensserien. Ett minnesfel dödar jobbet högljutt och är
+    # därför att föredra: säkerhetsventilen tas bort med flit just för den här körningen.
+    foamDictionary -entry castellatedMeshControls/maxLocalCells -set 8000000 $S ;;
   fine) : ;;   # the dictionary ships at fine
   *) echo "unknown mesh level: $MESH" >&2; exit 2 ;;
 esac

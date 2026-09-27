@@ -16,7 +16,8 @@ ett tryckfält blir de kanterna lätt lästa som fysik.
   python3 tools/plot_fields.py <fältkatalog> <utkatalog> [--uinf 12.5] [--tag namn]
 """
 import sys, os, glob, argparse
-import numpy as np, meshio, trimesh
+import numpy as np, trimesh
+from vtp import read_vtp, _VTP_DT, _vtp_array
 from PIL import Image, ImageDraw
 
 SURFACE   = (252, 252, 251)
@@ -50,6 +51,9 @@ def sequential(v, lo, hi):
 
 def read_surface(path):
     """VTK -> (trimesh, {fältnamn: värde per triangel})."""
+    if path.endswith('.vtp'):
+        return read_vtp(path)
+    import meshio        # bara .vtk behöver den; verdict-jobbet slipper installera
     m = meshio.read(path)
     pts = m.points.astype(np.float64)
     tris, src = [], []          # src: index i den ursprungliga cellistan
@@ -148,8 +152,8 @@ def load_case(d):
         tdirs = sorted(glob.glob(os.path.join(d, 'diagSurfaces', '*'))) or [d]
     t = tdirs[-1]
     parts = {}
-    for f in sorted(glob.glob(os.path.join(t, 's_*.vtk')) + glob.glob(os.path.join(t, '*.vtk'))):
-        name = os.path.basename(f).replace('.vtk', '').removeprefix('s_')
+    for f in sorted(sorted(glob.glob(os.path.join(t, '*.vtp')) + glob.glob(os.path.join(t, '*.vtk')))):
+        name = os.path.basename(f).rsplit('.', 1)[0].removeprefix('s_')
         try:
             parts[name] = read_surface(f)
         except Exception as e:
@@ -196,11 +200,18 @@ def main():
                            os.path.join(a.out, 'tau_mag_side.png'),
                            note='ljust = lag skjuvning, alltso avlost eller stillastaende flode',
                            ticks=tick(0, hi)))
-        tx = w[:, 0]; tl = float(np.percentile(np.abs(tx), 99))
+        # TECKENKONVENTION. OpenFOAMs wallShearStress returnerar spänningen med
+        # MOTSATT tecken mot strömningsriktningen. Kontrollerat mot integralen:
+        # summan av tau_x*dA över alla patchar blir -0.0111 m^2 i råa värden, och
+        # friktionsmotstånd måste vara positivt i färdriktningen. Vänt tecken ger
+        # +0.0111, alltså 5.8 % av total CdA, vilket är rimligt för en trubbig kropp.
+        # Utan den här vändningen läses bilden bakvänt: allt attached flöde såg ut
+        # som backströmning.
+        tx = -w[:, 0]; tl = float(np.percentile(np.abs(tx), 99))
         outs.append(render(tri, tx, lambda v: diverging(v, tl),
                            f'tau_w,x  ·  {tg}  ·  det gra bandet ar separationslinjen', 'm2/s2',
                            os.path.join(a.out, 'tau_x_side.png'),
-                           note='blatt = backstromning (tau_x < 0), rott = medstroms',
+                           note='rott = medstroms (attached), BLATT = backstromning alltsa AVLOST',
                            ticks={'map': lambda t: (t*2-1)*tl,
                                   'marks': [(0, f'{-tl:+.3f}'), (0.5, '0'), (1, f'{tl:+.3f}')]}))
     for o in outs: print(f"  {o}")
