@@ -3,6 +3,23 @@
 **Skala:** hjul 700c + 25 mm däck → Ø672 mm (sidovy, 1.556 mm/px, ~3° kamerarotation korrigerad via axellinjen). Hjälmbredd 190 mm → breddskala i frontvyn (perspektivkorrigerad för axlar/knän).
 **Kontroll:** hjälmlängd från sidovyn blev 316 mm (rimligt för kort aerohjälm), hjulbas 982 mm, vevlagerhöjd 248 mm.
 
+## Resultat att titta på efter en körning
+
+Varje körning publicerar sig själv på grenen **[`results`](../../tree/results/runs)**: en mapp
+per körning med samma tabeller som i jobbsammanfattningen, plus Cp-, skjuvnings- och vakbilder.
+GitHub renderar markdown med bilder direkt i webben, så det går att läsa på telefon utan att
+ladda ner något. Indexet i `runs/README.md` listar alla körningar nyast först med deltat per
+vinkel.
+
+Historiken är grenens git-log. Det är hela poängen: rå VTK i artefakterna försvinner efter 30
+dagar, så en körning som ingen skrev upp för hand var tidigare i praktiken borta.
+
+Rapporten byggs av `tools/build_report.py` i verdict-jobbet. Den tar de tre bilder per fall som
+faktiskt läses — Cp i sidvy, `tau_w,x` som visar separationslinjen, och vaken ur symmetrisnittet
+— och kvantiserar dem till palett, vilket tar en ytrendering från ~350 till ~125 kB. En körning
+kostar ungefär 3 MB. Den fullständiga uppsättningen, inklusive topvy och skjuvningsmagnitud,
+ligger kvar i körningens artefakt i 30 dagar tillsammans med rå VTK för ParaView.
+
 ## Innehåll
 - `geometry/` – rider.stl, bike.stl, wheel_rear.stl, wheel_front.stl (vattentäta, meter).
   `rider_bike_full.stl` (boolesk union) genereras också men är gitignorerad – den används bara

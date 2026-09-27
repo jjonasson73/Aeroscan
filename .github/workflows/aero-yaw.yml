@@ -151,6 +151,9 @@ jobs:
     needs: run
     if: always()
     runs-on: ubuntu-24.04
+    # Skrivrättighet behövs för att publicera rapporten på results-grenen.
+    permissions:
+      contents: write
     defaults:
       run: { shell: bash, working-directory: aero_case }
     steps:
@@ -159,7 +162,7 @@ jobs:
         with: { path: aero_case/results }
       - name: Yaw report
         run: |
-          pip install --quiet numpy trimesh
+          pip install --quiet numpy trimesh pillow
           # tee: utslaget måste synas i jobbloggen också - sammanfattningen går inte att
           # läsa via API:et.
           {
@@ -174,4 +177,59 @@ jobs:
             # i git, och de gar att lasa via API:et. Faller den ska rapporten anda sta kvar.
             python3 tools/field_report.py results --uinf "${{ inputs.speed }}" \
               || echo '*Faltuppdelningen misslyckades - se loggen.*'
-          } | tee -a $GITHUB_STEP_SUMMARY
+          } | tee body.md >> "$GITHUB_STEP_SUMMARY"
+          # Samma text till loggen, eftersom sammanfattningen inte gar att lasa via API:et.
+          cat body.md
+
+      # Rapporten: samma siffror som i sammanfattningen, plus bilderna, lagda pa en
+      # egen gren dar GitHub renderar dem direkt. Historiken blir grenens git-log.
+      # Utan det ar en korning man inte skrev upp for hand i praktiken borta - ra VTK
+      # i artefakterna forsvinner efter 30 dagar.
+      - name: Bygg rapport
+        env:
+          FIT: ${{ inputs.fit }}
+          ANGLES: ${{ inputs.yaw_angles }}
+          MESH: ${{ inputs.mesh }}
+          SPEED: ${{ inputs.speed }}
+        run: |
+          D=$(date -u +%Y-%m-%d)
+          python3 tools/build_report.py results report \
+            --body body.md --uinf "$SPEED" \
+            --run-id "${{ github.run_id }}" --mesh "$MESH" \
+            --fit "$FIT" --angles "$ANGLES" \
+            --commit "${{ github.sha }}" --date "$D" \
+            --slug "$D-${{ github.run_id }}-$MESH" \
+            --repo "${{ github.repository }}"
+
+      - name: Publicera pa results-grenen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MESH: ${{ inputs.mesh }}
+        run: |
+          D=$(date -u +%Y-%m-%d); SLUG="$D-${{ github.run_id }}-$MESH"
+          R=$(mktemp -d)
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          # Grenen ar fristaende (orphan) med flit. Rapporterna ska inte bara kodens
+          # historik, och en separat gren kan inte krocka med pushar till utvecklingsgrenen.
+          if git clone --depth 1 --branch results "$URL" "$R" 2>/dev/null; then
+            echo "results-grenen finns"
+          else
+            echo "skapar results-grenen"
+            git clone --depth 1 "$URL" "$R"
+            git -C "$R" checkout --orphan results
+            git -C "$R" rm -rq --cached . || true
+            find "${R:?}" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          fi
+          mkdir -p "$R/runs"; rm -rf "$R/runs/$SLUG"; cp -r report "$R/runs/$SLUG"
+          python3 tools/build_report.py --index "$R/runs"
+          cd "$R"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Rapport: $SLUG" || { echo "inget nytt att commita"; exit 0; }
+          # Tva korningar som blir klara samtidigt pushar till samma gren.
+          for i in 1 2 3 4; do
+            git push origin results && exit 0
+            sleep $((2 ** i)); git pull --rebase origin results || true
+          done
+          echo "push misslyckades efter fyra forsok" >&2; exit 1
