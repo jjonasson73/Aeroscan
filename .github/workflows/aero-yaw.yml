@@ -33,7 +33,7 @@ on:
         type: choice
         # surf = mediums boxar men ryttarens yta en nivå finare. Den enda nivån som kan
         # visa ytkonvergens ovanifrån; se kommentaren i tools/configure_case.sh.
-        options: [quick, coarse, medium, surf, fine]
+        options: [quick, coarse, medium, surf, surf7, fine]
         default: medium
       max_iterations:
         default: "1500"
