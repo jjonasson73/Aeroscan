@@ -92,7 +92,7 @@ def build(a):
     os.makedirs(a.out, exist_ok=True)
     body = open(a.body, encoding='utf-8').read() if a.body else ''
     cases = sorted(d for d in glob.glob(os.path.join(a.results, '*')) if os.path.isdir(d))
-    made, total = {}, 0
+    made, total, had_data, failed = {}, 0, 0, False
     for d in cases:
         case = os.path.basename(d)
         # field_report har redan packat upp fields.tar.gz i fallets katalog. Finns
@@ -119,7 +119,19 @@ def build(a):
             if os.path.basename(junk) not in {k[0] for k in got}:
                 os.remove(junk)
         made[case] = got
+        had_data += 1
         print(f'{case}: {len(got)} bilder')
+
+    # Tyst noll ar det farliga utfallet. Steget kors med continue-on-error sa att en
+    # trasig rapport inte faller en lyckad CFD-korning, vilket betyder att ett gront
+    # jobb INTE bevisar att bilderna blev till. Forsta rokestet gick igenom med noll
+    # bilder eftersom scipy saknades, och det syntes bara djupt i loggen. Darfor ar
+    # "fanns faltdata men ingen bild blev till" nu ett fel med exitkod, sa det dyker
+    # upp som en varningsannotering i granssnittet i stallet for att forsvinna.
+    if had_data and total == 0:
+        print(f'INGEN bild kunde byggas for nagot av {had_data} fall med faltdata - '
+              f'se traceback ovan (saknat bibliotek?)', file=sys.stderr)
+        failed = True
 
     meta = dict(run_id=a.run_id, mesh=a.mesh, fit=a.fit, angles=a.angles,
                 speed=a.uinf, commit=a.commit, date=a.date, slug=a.slug,
@@ -141,6 +153,8 @@ def build(a):
             for fn, title, note in made[case]:
                 f.write(f'\n**{title}**  \n{note}\n\n![{title}]({case}/{fn})\n')
     print(f'rapport klar, bilder {total/1e6:.1f} MB')
+    if failed:
+        sys.exit(1)
 
 
 def index(runs):
