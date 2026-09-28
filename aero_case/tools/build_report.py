@@ -136,6 +136,17 @@ def build(a):
     meta = dict(run_id=a.run_id, mesh=a.mesh, fit=a.fit, angles=a.angles,
                 speed=a.uinf, commit=a.commit, date=a.date, slug=a.slug,
                 cda=parse_cda(body), cases=sorted(made))
+    # 3D-visarens datapaket. Ligger i samma rapportmapp sa att en korning bar bade
+    # bilderna och det interaktiva; visaren hamtar det fran results-grenen.
+    # Faller den ska rapporten anda sta kvar, darfor fangas felet har.
+    r = subprocess.run([sys.executable, 'tools/export_viewer.py', a.results,
+                        os.path.join(a.out, 'viewer'), '--uinf', str(a.uinf)],
+                       cwd=HERE + '/..', capture_output=True, text=True)
+    print(r.stdout.strip() or r.stderr.strip()[-600:])
+    if r.returncode:
+        print('visardata kunde inte byggas - rapporten star kvar utan den',
+              file=sys.stderr)
+
     json.dump(meta, open(os.path.join(a.out, 'meta.json'), 'w'), indent=1)
 
     with open(os.path.join(a.out, 'README.md'), 'w', encoding='utf-8') as f:
@@ -185,6 +196,14 @@ def index(runs):
                     f"{m.get('angles','?')} | {fmt_cda(m.get('cda', []))} | "
                     f"[öppna]({m.get('slug','.')}/) |\n")
         f.write(f'\n{len(metas)} körningar.\n')
+    # Samma lista som maskinläsbar fil. 3D-visaren hämtar den för att fylla sin
+    # körningsväljare; att låta den parsa markdowntabellen vore att göra
+    # presentationen till ett API.
+    json.dump([dict(slug=m['slug'], date=m['date'], mesh=m.get('mesh', '?'),
+                    angles=m.get('angles', '?'), cda=m.get('cda', []),
+                    viewer=os.path.isdir(os.path.join(runs, m['slug'], 'viewer')))
+               for m in metas],
+              open(os.path.join(runs, 'runs.json'), 'w'), indent=1)
     print(f'index: {len(metas)} körningar')
 
 
