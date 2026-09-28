@@ -39,6 +39,22 @@ SLICE_X = (-1.30, 2.90)
 SLICE_Z = (0.00, 1.90)
 
 
+def face_to_vertex(mesh, vals):
+    """Medelvarde av de trianglar som ror hornet.
+
+    OpenFOAMs surfaces-objekt skriver fälten PER TRIANGEL - p, wallShearStress, U
+    och k har alla lika manga varden som meshen har trianglar, inte horn. Visaren
+    fargar per horn. Utan den har omraekningen indexeras triangelvarden med
+    hornindex, vilket ger ett slumpmonster som ser ut som brus pa kroppen.
+    """
+    f = np.asarray(mesh.faces).ravel()
+    nv = len(mesh.vertices)
+    vals = np.asarray(vals, float)
+    cnt = np.bincount(f, minlength=nv)
+    s = np.bincount(f, weights=np.repeat(vals, 3), minlength=nv)
+    return s / np.maximum(cnt, 1)
+
+
 def quant_pos(v):
     """uint16 över meshens egen låda. Returnerar (packat, lo, sc)."""
     lo = v.min(0)
@@ -147,17 +163,18 @@ def main():
             print(f'{case}: ingen ryttaryta, hoppas över', file=sys.stderr)
             continue
         centre = (np.asarray(rm.vertices).min(0) + np.asarray(rm.vertices).max(0)) / 2
-        cp = np.asarray(rf['p']) / q
-        tx = -np.asarray(rf['wallShearStress'])[:, 0] if 'wallShearStress' in rf \
-            else np.zeros(len(cp))
+        # Skalarerna raknas per triangel och laggs sedan om till horn.
+        cp = face_to_vertex(rm, np.asarray(rf['p']) / q)
+        tx = face_to_vertex(rm, -np.asarray(rf['wallShearStress'])[:, 0]) \
+            if 'wallShearStress' in rf else np.zeros(len(rm.vertices))
         bm, _ = load_surface(d, ['s_bike', 's_wheel_front', 's_wheel_rear'])
 
         sm = su = sk = None
         g = glob.glob(os.path.join(d, 'postProcessing', 'diagSlice', '*', '*.vtp'))
         if g:
             sm, sf = read_vtp(sorted(g)[-1])
-            su = np.linalg.norm(np.asarray(sf['U']), axis=1) / a.uinf
-            sk = np.asarray(sf['k'])
+            su = face_to_vertex(sm, np.linalg.norm(np.asarray(sf['U']), axis=1) / a.uinf)
+            sk = face_to_vertex(sm, np.asarray(sf['k']))
 
         raw[case] = dict(rm=rm, cp=cp, tx=tx, bm=bm, sm=sm, su=su, sk=sk, centre=centre)
         order.append(case)
