@@ -1,0 +1,30 @@
+{
+ "run_id": "36379908097",
+ "mesh": "quick",
+ "fit": "pad_drop_mm=-10 saddle_fore_mm=10 saddle_up_mm=6",
+ "angles": "[0,10]",
+ "speed": 12.5,
+ "commit": "84142a0e375b6238bfa8c3132ca905d26c94f8e0",
+ "date": "2026-09-28",
+ "slug": "2026-09-28-36379908097-quick",
+ "cda": [
+  {
+   "yaw": 0,
+   "base": 0.1632,
+   "tuned": 0.1582,
+   "delta": -0.005
+  },
+  {
+   "yaw": 10,
+   "base": 0.1695,
+   "tuned": 0.1745,
+   "delta": 0.005
+  }
+ ],
+ "cases": [
+  "y0-base",
+  "y0-tuned",
+  "y10-base",
+  "y10-tuned"
+ ]
+}
