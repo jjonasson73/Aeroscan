@@ -1,0 +1,65 @@
+[
+ {
+  "slug": "2026-09-28-36397544693-quick",
+  "date": "2026-09-28",
+  "mesh": "quick",
+  "angles": "[0,10]",
+  "cda": [
+   {
+    "yaw": 0,
+    "base": 0.1626,
+    "tuned": 0.1584,
+    "delta": -0.0042
+   },
+   {
+    "yaw": 10,
+    "base": 0.1699,
+    "tuned": 0.1726,
+    "delta": 0.0027
+   }
+  ],
+  "viewer": true
+ },
+ {
+  "slug": "2026-09-28-36382783003-quick",
+  "date": "2026-09-28",
+  "mesh": "quick",
+  "angles": "[0,10]",
+  "cda": [
+   {
+    "yaw": 0,
+    "base": 0.1626,
+    "tuned": 0.157,
+    "delta": -0.0056
+   },
+   {
+    "yaw": 10,
+    "base": 0.1705,
+    "tuned": 0.1731,
+    "delta": 0.0026
+   }
+  ],
+  "viewer": false
+ },
+ {
+  "slug": "2026-09-28-36379908097-quick",
+  "date": "2026-09-28",
+  "mesh": "quick",
+  "angles": "[0,10]",
+  "cda": [
+   {
+    "yaw": 0,
+    "base": 0.1632,
+    "tuned": 0.1582,
+    "delta": -0.005
+   },
+   {
+    "yaw": 10,
+    "base": 0.1695,
+    "tuned": 0.1745,
+    "delta": 0.005
+   }
+  ],
+  "viewer": false
+ }
+]
