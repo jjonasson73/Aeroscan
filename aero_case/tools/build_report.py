@@ -144,13 +144,24 @@ def build(a):
 
 
 def index(runs):
+    # Länken och sorteringen tas ur MAPPNAMNET, inte ur meta.json. Mappen är det som
+    # faktiskt finns; meta.json är beskrivande data som kan ha byggts med fel slug och
+    # då pekade indexet på någon annans rapport. Mappnamnet börjar med datumet, så det
+    # duger också som sorteringsnyckel. meta.json används bara för kolumnernas innehåll.
     metas = []
-    for m in glob.glob(os.path.join(runs, '*', 'meta.json')):
+    for m in sorted(glob.glob(os.path.join(runs, '*', 'meta.json')), reverse=True):
+        d = os.path.basename(os.path.dirname(m))
         try:
-            metas.append(json.load(open(m)))
+            meta = json.load(open(m))
         except Exception as e:
-            print(f'hoppar över {m}: {e}', file=sys.stderr)
-    metas.sort(key=lambda m: m.get('date', ''), reverse=True)
+            print(f'{d}: oläsbar meta.json ({e}), tar med den ändå', file=sys.stderr)
+            meta = {}
+        if meta.get('slug') and meta['slug'] != d:
+            print(f'{d}: meta.json säger slug={meta["slug"]!r}, använder mappnamnet',
+                  file=sys.stderr)
+        meta['slug'] = d
+        meta['date'] = d[:10]        # mappen bar datumet, inte meta.json
+        metas.append(meta)
     with open(os.path.join(runs, 'README.md'), 'w', encoding='utf-8') as f:
         f.write('# Körningar\n\nNyast först. Varje rad länkar till körningens '
                 'rapport med tabeller och bilder.\n\n')
