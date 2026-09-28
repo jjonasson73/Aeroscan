@@ -1394,3 +1394,105 @@ CdA_eff-tabellen säger nu att den tunade positionen vinner vid varje vindstyrka
 −4.1 %. **Läs den inte som ett resultat.** Den vilar på 10-graderspunkten, som är den punkt som
 just visats vara icke-konvergerad, och på ett 0° som är underiterererat. Att den ser trevlig ut
 är inget argument för den.
+
+### surf7 stänger teckenfrågan vid 10° och river min 0°-slutsats (2026-09-27)
+
+Run 36298618172, `surf7` = ryttarens yta (6 7) och kantförfining 7, mediums boxar, `[0,10]`,
+1500 iterationer, commit 42a330c. Alla fem jobb gröna, ingen driftflagga.
+
+| yaw | base CdA ± svängning | tuned CdA ± svängning | ΔCdA |
+|---|---|---|---|
+| +0 | 0.1936 ± 0.0025 | 0.1896 ± 0.0027 | **−0.0039** ± 0.0037 |
+| +10 | 0.1919 ± 0.0021 | 0.1817 ± 0.0019 | **−0.0101** ± 0.0028 |
+
+Kontrollraderna är de bästa hittills: vid 0° bike +0.0011 och wheels −0.0001, vid 10° −0.0003
+och −0.0004. Näten har inte drivit isär.
+
+#### Hela ytserien, fyra nivåer
+
+| yaw | coarse (4 5) | medium (5 6) | surf (6 6) | surf7 (6 7) | spann |
+|---|---|---|---|---|---|
+| **0°** | +0.0001 ⚠ | −0.0063 | −0.0063 | **−0.0040** | 0.0063 |
+| **10°** | −0.0086 | **+0.0030** | −0.0085 | **−0.0102** | 0.0132 |
+
+#### Det som nu är avgjort: medium var avvikaren
+
+**Tre av fyra nivåer ger samma tecken och ungefär samma storlek vid 10°:** −0.0086, −0.0085,
+−0.0102. Medium står ensam på +0.0030. Steget surf→surf7 flyttade deltat 0.0017, vilket ligger
+inom surf7:s egen svängning på 0.0028.
+
+Slutsatsen som drev flera dagars arbete — **att den tunade positionen förlorar i sidvind — är
+därmed motbevisad.** Den vilade på medium, och medium är den enda av fyra nivåer som säger så.
+Den tunade positionen vinner vid 10 grader, och vinner mer där än rakt framifrån.
+
+Vid 10° är deltat dessutom 3.6 gånger svängningen, vilket är den bästa marginalen någon punkt i
+projektet haft.
+
+#### Det som rivs: min slutsats att 0° var nätkonvergerat
+
+Igår skrev jag att 0°-deltat är nätkonvergerat, eftersom medium och surf gav −0.0063 båda,
+identiskt på fjärde decimalen. **surf7 ger −0.0040.** Rörelsen är 0.0023, alltså över tröskeln
+på 0.0010, och surf7:s 0°-delta är bara 1.1 gånger sin egen svängning — i praktiken inte
+upplöst alls.
+
+Och felet i mitt resonemang är exakt det jag beskrev *dagen innan* om medium↔fine:
+
+> Att två nivåer med *identisk yta* ger samma svar visar att boxarna räcker, inte att ytan gör det.
+
+**medium och surf har samma maxnivå, 6.** Den ena lyfter bara minnivån från 5 till 6. Att de är
+överens visar att de flacka nivå-5-partierna inte spelade roll — inte att ytan var upplöst. Först
+surf7 inför nivå 7, och då rör sig svaret. Jag gick i samma fälla en dag efter att jag skrivit ner
+den. Tvåpunktsöverensstämmelse är inte konvergens när båda punkterna delar den begränsande
+parametern.
+
+#### Mekanismen håller, och den pekar monotont
+
+Bandet 1050–1200 mm, övre ryggen, vid 10 grader:
+
+| nivå | base | tuned | Δ |
+|---|---|---|---|
+| medium | 0.0257 | 0.0309 | +0.0052 |
+| surf | 0.0258 | 0.0267 | +0.0009 |
+| surf7 | 0.0284 | 0.0227 | **−0.0057** |
+
+`tuned` går 0.0309 → 0.0267 → 0.0227, monotont nedåt med förfining. `base` ligger i stort sett
+still, 0.0257 → 0.0258 → 0.0284. Hypotesen från igår står kvar och har nu tre punkter: **grövre
+ytnät underupplöste den tunade positionens övre rygg och gav ett falskt positivt bidrag där.**
+
+Kvalitativt har något annat ändrats också. På medium och surf var 10-gradersdeltat en liten rest
+mellan stora motverkande band. På surf7 pekar övre kroppens band alla samma väg: −0.0037,
+−0.0057, −0.0042. Deltat är en sammanhängande summa i stället för en nästan-utsläckning, vilket är
+varför det också är bättre upplöst mot svängningen.
+
+Men `tuned` rör sig fortfarande 0.0040 i det bandet mellan surf och surf7. **Ingen magnitud är
+konvergerad.**
+
+#### Var det lämnar projektet
+
+- **Tecknet vid 10° är robust** över tre nivåer. Den tunade positionen vinner, mer i sidvind än
+  rakt fram. Det är den första slutsatsen i projektet som överlevt en nätserie.
+- **Ingen magnitud är konvergerad**, varken vid 0° eller 10°. Storleken ligger grovt på −0.004
+  rakt fram och −0.010 vid 10°, alltså 2 % och 5 %, med en nätosäkerhet kring 0.002–0.003.
+- **0° är sämst ställt**, inte bäst som jag trodde. Deltat är i nivå med svängningen, och det är
+  dessutom underiterererat vid 1500 iterationer.
+
+Nätosäkerheten, 0.002–0.003, är nu **jämförbar med geometrikänsligheten** på 0.004–0.007 i stället
+för en faktor 3–5 under den. Ingen av de två dominerar längre, vilket betyder att bara förfina
+det ena inte hjälper.
+
+#### Kostnaden, och vad den avslöjar
+
+| nivå | mesh+solve, snitt | mot föregående |
+|---|---|---|
+| medium | 90 min | — |
+| surf (6 6) | 121 min | 1.35× |
+| surf7 (6 7) | 135 min | **1.11×** |
+
+Att nivå 7 bara kostade 11 % betyder att de cellerna är **få** — krökningskriteriet
+(`resolveFeatureAngle 30`) kräver nivå 7 bara på ett fåtal ställen, eftersom kroppen är byggd av
+släta ellipsoidhöljen. Få celler, men de flyttade svaret 0.0017 vid 10° och 0.0023 vid 0°. De
+sitter alltså där flödet är känsligt.
+
+Det säger också att en nivå till är ekonomiskt möjlig. Vad det inte säger är att den skulle
+avgöra något: serien 0.0063 → 0.0000 → 0.0023 vid 0° och 0.0116 → 0.0115 → 0.0017 vid 10° går
+inte monotont mot noll, och att gissa gränsvärdet ur den är inte försvarbart.

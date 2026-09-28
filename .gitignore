@@ -21,3 +21,8 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Verdict-jobbets arbetsfiler. Skapas i aero_case vid en körning och hör inte i koden.
+aero_case/results/
+aero_case/report/
+aero_case/body.md

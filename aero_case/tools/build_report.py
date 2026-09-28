@@ -92,7 +92,7 @@ def build(a):
     os.makedirs(a.out, exist_ok=True)
     body = open(a.body, encoding='utf-8').read() if a.body else ''
     cases = sorted(d for d in glob.glob(os.path.join(a.results, '*')) if os.path.isdir(d))
-    made, total = {}, 0
+    made, total, had_data, failed = {}, 0, 0, False
     for d in cases:
         case = os.path.basename(d)
         # field_report har redan packat upp fields.tar.gz i fallets katalog. Finns
@@ -119,11 +119,34 @@ def build(a):
             if os.path.basename(junk) not in {k[0] for k in got}:
                 os.remove(junk)
         made[case] = got
+        had_data += 1
         print(f'{case}: {len(got)} bilder')
+
+    # Tyst noll ar det farliga utfallet. Steget kors med continue-on-error sa att en
+    # trasig rapport inte faller en lyckad CFD-korning, vilket betyder att ett gront
+    # jobb INTE bevisar att bilderna blev till. Forsta rokestet gick igenom med noll
+    # bilder eftersom scipy saknades, och det syntes bara djupt i loggen. Darfor ar
+    # "fanns faltdata men ingen bild blev till" nu ett fel med exitkod, sa det dyker
+    # upp som en varningsannotering i granssnittet i stallet for att forsvinna.
+    if had_data and total == 0:
+        print(f'INGEN bild kunde byggas for nagot av {had_data} fall med faltdata - '
+              f'se traceback ovan (saknat bibliotek?)', file=sys.stderr)
+        failed = True
 
     meta = dict(run_id=a.run_id, mesh=a.mesh, fit=a.fit, angles=a.angles,
                 speed=a.uinf, commit=a.commit, date=a.date, slug=a.slug,
                 cda=parse_cda(body), cases=sorted(made))
+    # 3D-visarens datapaket. Ligger i samma rapportmapp sa att en korning bar bade
+    # bilderna och det interaktiva; visaren hamtar det fran results-grenen.
+    # Faller den ska rapporten anda sta kvar, darfor fangas felet har.
+    r = subprocess.run([sys.executable, 'tools/export_viewer.py', a.results,
+                        os.path.join(a.out, 'viewer'), '--uinf', str(a.uinf)],
+                       cwd=HERE + '/..', capture_output=True, text=True)
+    print(r.stdout.strip() or r.stderr.strip()[-600:])
+    if r.returncode:
+        print('visardata kunde inte byggas - rapporten star kvar utan den',
+              file=sys.stderr)
+
     json.dump(meta, open(os.path.join(a.out, 'meta.json'), 'w'), indent=1)
 
     with open(os.path.join(a.out, 'README.md'), 'w', encoding='utf-8') as f:
@@ -141,16 +164,29 @@ def build(a):
             for fn, title, note in made[case]:
                 f.write(f'\n**{title}**  \n{note}\n\n![{title}]({case}/{fn})\n')
     print(f'rapport klar, bilder {total/1e6:.1f} MB')
+    if failed:
+        sys.exit(1)
 
 
 def index(runs):
+    # Länken och sorteringen tas ur MAPPNAMNET, inte ur meta.json. Mappen är det som
+    # faktiskt finns; meta.json är beskrivande data som kan ha byggts med fel slug och
+    # då pekade indexet på någon annans rapport. Mappnamnet börjar med datumet, så det
+    # duger också som sorteringsnyckel. meta.json används bara för kolumnernas innehåll.
     metas = []
-    for m in glob.glob(os.path.join(runs, '*', 'meta.json')):
+    for m in sorted(glob.glob(os.path.join(runs, '*', 'meta.json')), reverse=True):
+        d = os.path.basename(os.path.dirname(m))
         try:
-            metas.append(json.load(open(m)))
+            meta = json.load(open(m))
         except Exception as e:
-            print(f'hoppar över {m}: {e}', file=sys.stderr)
-    metas.sort(key=lambda m: m.get('date', ''), reverse=True)
+            print(f'{d}: oläsbar meta.json ({e}), tar med den ändå', file=sys.stderr)
+            meta = {}
+        if meta.get('slug') and meta['slug'] != d:
+            print(f'{d}: meta.json säger slug={meta["slug"]!r}, använder mappnamnet',
+                  file=sys.stderr)
+        meta['slug'] = d
+        meta['date'] = d[:10]        # mappen bar datumet, inte meta.json
+        metas.append(meta)
     with open(os.path.join(runs, 'README.md'), 'w', encoding='utf-8') as f:
         f.write('# Körningar\n\nNyast först. Varje rad länkar till körningens '
                 'rapport med tabeller och bilder.\n\n')
@@ -160,6 +196,14 @@ def index(runs):
                     f"{m.get('angles','?')} | {fmt_cda(m.get('cda', []))} | "
                     f"[öppna]({m.get('slug','.')}/) |\n")
         f.write(f'\n{len(metas)} körningar.\n')
+    # Samma lista som maskinläsbar fil. 3D-visaren hämtar den för att fylla sin
+    # körningsväljare; att låta den parsa markdowntabellen vore att göra
+    # presentationen till ett API.
+    json.dump([dict(slug=m['slug'], date=m['date'], mesh=m.get('mesh', '?'),
+                    angles=m.get('angles', '?'), cda=m.get('cda', []),
+                    viewer=os.path.isdir(os.path.join(runs, m['slug'], 'viewer')))
+               for m in metas],
+              open(os.path.join(runs, 'runs.json'), 'w'), indent=1)
     print(f'index: {len(metas)} körningar')
 
 

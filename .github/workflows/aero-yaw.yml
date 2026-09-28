@@ -162,7 +162,11 @@ jobs:
         with: { path: aero_case/results }
       - name: Yaw report
         run: |
-          pip install --quiet numpy trimesh pillow
+          # Hela requirements.txt, inte en handskriven delmangd. Delmangden drev isar
+          # fran koden tva ganger: forst saknades pillow, sen scipy, och bada gangerna
+          # passerade det lokalt dar biblioteken finns. En lista ar billigare an att
+          # gissa importkedjan ratt.
+          pip install --quiet -r requirements.txt
           # tee: utslaget måste synas i jobbloggen också - sammanfattningen går inte att
           # läsa via API:et.
           {

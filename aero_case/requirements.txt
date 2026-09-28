@@ -8,3 +8,5 @@ shapely>=2.0
 pillow>=10.0
 # trimesh imports networkx lazily for several graph operations
 networkx>=3.0
+# trimesh.simplify_quadric_decimation (export_viewer.py) gar via den har
+fast_simplification>=0.1
